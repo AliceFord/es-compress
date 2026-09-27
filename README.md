@@ -17,7 +17,7 @@ Planned (though probably will never get round to it), is to expand to include mo
 #### `[header]`
 
 ```
-magic value   4 bytes ("")
+magic value   4 bytes ("esco")
 version       1 byte
 ```
 

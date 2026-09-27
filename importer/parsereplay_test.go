@@ -1,15 +1,17 @@
-package importer
+package importer_test
 
 import (
 	"testing"
 	"time"
+
+	"github.com/AliceFord/es-compress/importer"
 )
 
 func TestParseGenericRecord(t *testing.T) {
 	in := `[10:22:44 >>>> EGPF_APP]
 @N:RYR6VW:6202:1:55.51142:-4.60886:36:0:4294966636:34`
 
-	got, err := ParseGenericRecord(in)
+	got, err := importer.ParseGenericRecord(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +29,7 @@ func TestParseGenericRecord(t *testing.T) {
 		t.Errorf("Direction = false, want true")
 	}
 
-	p, ok := got.Record.(PositionRecord)
+	p, ok := got.Record.(importer.PositionRecord)
 	if !ok {
 		t.Fatalf("Record type = %T, want PositionRecord", got.Record)
 	}
