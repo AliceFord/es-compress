@@ -30,13 +30,17 @@ version       1 byte
 [stop]
 ```
 
+
+
 #### `[callsign]`
 
 ```
 [A-Z0-9_]+ followed by 0 byte
 ```
 
-#### `[stop]` 
+
+
+#### `[stop]`
 
 ```
 0 byte
@@ -44,7 +48,7 @@ version       1 byte
 
 
 
-#### `[aircraft registry]` 
+#### `[aircraft registry]`
 
 ```
 [callsign]
@@ -52,6 +56,8 @@ version       1 byte
 [callsign]
 [stop]
 ```
+
+
 
 #### `[callsign]`
 
@@ -61,17 +67,19 @@ version       1 byte
 
 
 
-#### `[record stream]` 
+#### `[record stream]`
 
 ```
 [timestamp]
-[record]
+[generic record]
 ...
-[record]
+[generic record]
 [stop]
 ... ([timestamp] -> [stop] repeated)
 [stop]
 ```
+
+
 
 #### `[timestamp]`
 
@@ -79,18 +87,23 @@ version       1 byte
 time in s  3 bytes (uint)
 ```
 
-#### `[record]` 
+
+
+#### `[generic record]`
 
 ```
 record type  1 byte
 [record of type [0]]
 ```
 
+
+
 #### `[record] (type 0): position record`
 
 ```
 transponder type   1 byte
-callsign id        2 bytes
+position id        1 byte
+aircraft id        2 bytes
 squawk             2 bytes  (uint)
 lat                4 bytes
 lon                4 bytes
