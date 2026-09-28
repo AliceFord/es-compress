@@ -3,8 +3,8 @@ package cmd
 import (
 	"os"
 
-	"github.com/AliceFord/es-compress/exporter"
-	"github.com/AliceFord/es-compress/importer"
+	exportesc "github.com/AliceFord/es-compress/exporter/esc"
+	importreplay "github.com/AliceFord/es-compress/importer/replay"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +23,7 @@ var encodeCmd = &cobra.Command{
 			return err
 		}
 
-		parsed, err := importer.Parse(string(data))
+		parsed, err := importreplay.Parse(string(data))
 		if err != nil {
 			return err
 		}
@@ -33,6 +33,6 @@ var encodeCmd = &cobra.Command{
 			return err
 		}
 
-		return os.WriteFile(outPath, exporter.Export(parsed), 0o644)
+		return os.WriteFile(outPath, exportesc.Export(parsed), 0o644)
 	},
 }

@@ -1,4 +1,4 @@
-package exporter
+package esc
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/AliceFord/es-compress/importer"
+	"github.com/AliceFord/es-compress/importer/replay"
 )
 
 const (
@@ -40,7 +40,7 @@ type aircraftState struct {
 	Heading      uint16
 }
 
-func Export(records []importer.GenericRecord) []byte {
+func Export(records []replay.GenericRecord) []byte {
 	var buf bytes.Buffer
 
 	buf.WriteString("skog")
@@ -52,7 +52,7 @@ func Export(records []importer.GenericRecord) []byte {
 	return buf.Bytes()
 }
 
-func writeRegistries(buf *bytes.Buffer, records []importer.GenericRecord) (map[string]uint8, map[string]uint16) {
+func writeRegistries(buf *bytes.Buffer, records []replay.GenericRecord) (map[string]uint8, map[string]uint16) {
 	callsigns := make([]string, 0)
 	callsignIDs := make(map[string]uint8)
 	aircraft := make([]string, 0)
@@ -64,7 +64,7 @@ func writeRegistries(buf *bytes.Buffer, records []importer.GenericRecord) (map[s
 			callsigns = append(callsigns, rec.Callsign)
 		}
 
-		pos, ok := rec.Record.(importer.PositionRecord)
+		pos, ok := rec.Record.(replay.PositionRecord)
 		if !ok {
 			continue
 		}
@@ -90,7 +90,7 @@ func writeCallsignList(buf *bytes.Buffer, callsigns []string) {
 	buf.WriteByte(stop)
 }
 
-func writeRecordStream(buf *bytes.Buffer, records []importer.GenericRecord, callsignIDs map[string]uint8, aircraftIDs map[string]uint16) {
+func writeRecordStream(buf *bytes.Buffer, records []replay.GenericRecord, callsignIDs map[string]uint8, aircraftIDs map[string]uint16) {
 	// Aircraft states
 	aircraftStates := make(map[uint16]aircraftState)
 
@@ -114,7 +114,7 @@ func writeRecordStream(buf *bytes.Buffer, records []importer.GenericRecord, call
 				writeControllerChangeRecord(buf, rec.Callsign, callsignIDs, currentState)
 			}
 
-			pos, ok := rec.Record.(importer.PositionRecord)
+			pos, ok := rec.Record.(replay.PositionRecord)
 			if !ok {
 				continue
 			}
@@ -140,7 +140,7 @@ func writeControllerChangeRecord(buf *bytes.Buffer, callsign string, callsignIDs
 	buf.WriteByte(callsignId)
 }
 
-func writePositionRecord(buf *bytes.Buffer, pos importer.PositionRecord, aircraftIDs map[string]uint16, last map[uint16]aircraftState) {
+func writePositionRecord(buf *bytes.Buffer, pos replay.PositionRecord, aircraftIDs map[string]uint16, last map[uint16]aircraftState) {
 	aircraftID := aircraftIDs[pos.Callsign]
 	next := stateFrom(pos)
 
@@ -311,7 +311,7 @@ func applyDelta(prev aircraftState, next aircraftState, d positionDelta) aircraf
 	return out
 }
 
-func stateFrom(pos importer.PositionRecord) aircraftState {
+func stateFrom(pos replay.PositionRecord) aircraftState {
 	return aircraftState{
 		IsNormalMode: pos.IsNormalMode,
 		Squawk:       uint16(pos.Squawk),
