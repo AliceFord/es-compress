@@ -35,7 +35,7 @@ type PositionRecord struct {
 
 func (PositionRecord) isPosition() {}
 
-func (r PositionRecord) Direction() bool {
+func (PositionRecord) Direction() bool {
 	return true
 }
 

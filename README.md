@@ -93,7 +93,6 @@ lat                4 bytes
 lon                4 bytes
 alt                2 bytes (uint)
 hdg                2 bytes (uint)
-[stop]
 ```
 
 #### `[record] (type 1): position record (delta only)`
@@ -104,9 +103,8 @@ position id                  1 byte
 aircraft id                  2 bytes
 (maybe) new transponder type 1 byte
 (maybe) new squawk           2 bytes (uint)
-(maybe) lat delta            1 byte
-(maybe) lon delta            1 byte
+(maybe) lat delta            2 bytes
+(maybe) lon delta            2 bytes
 (maybe) alt delta            2 bytes
 (maybe) hdg delta            1 byte
-[stop]
 ```

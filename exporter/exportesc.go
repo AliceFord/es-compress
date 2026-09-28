@@ -155,20 +155,19 @@ func writeFullPositionRecord(buf *bytes.Buffer, positionID uint8, aircraftID uin
 	writeFloat32(buf, state.Longitude)
 	writeUint16(buf, state.Altitude)
 	writeUint16(buf, state.Heading)
-	buf.WriteByte(stop)
 }
 
 type positionDelta struct {
 	changeMap    byte
 	isNormalMode bool
 	squawk       uint16
-	lat          int8
-	lon          int8
+	lat          int16
+	lon          int16
 	alt          int16
 	hdg          int8
 }
 
-func makeDelta(prev, next aircraftState) (positionDelta, bool) {
+func makeDelta(prev aircraftState, next aircraftState) (positionDelta, bool) {
 	var d positionDelta
 
 	if next.IsNormalMode != prev.IsNormalMode {
@@ -246,22 +245,20 @@ func writeDeltaRecord(buf *bytes.Buffer, positionID uint8, aircraftID uint16, st
 	}
 
 	if d.changeMap&changeLat != 0 {
-		buf.WriteByte(byte(d.lat))
+		writeInt16(buf, d.lat)
 	}
 
 	if d.changeMap&changeLon != 0 {
-		buf.WriteByte(byte(d.lon))
+		writeInt16(buf, d.lon)
 	}
 
 	if d.changeMap&changeAlt != 0 {
-		buf.WriteByte(byte(d.alt))
+		writeInt16(buf, d.alt)
 	}
 
 	if d.changeMap&changeHdg != 0 {
 		buf.WriteByte(byte(d.hdg))
 	}
-
-	buf.WriteByte(stop)
 }
 
 func applyDelta(prev aircraftState, next aircraftState, d positionDelta) aircraftState {
@@ -306,8 +303,8 @@ func stateFrom(pos importer.PositionRecord) aircraftState {
 	}
 }
 
-func coordDelta(diff float32) (int8, bool) {
-	return int8Delta(int(math.Round(float64(diff) / coordDeltaUnit)))
+func coordDelta(diff float32) (int16, bool) {
+	return int16Delta(int(math.Round(float64(diff) / coordDeltaUnit)))
 }
 
 func int8Delta(diff int) (int8, bool) {
@@ -331,6 +328,10 @@ func writeUint16(buf *bytes.Buffer, v uint16) {
 
 	binary.LittleEndian.PutUint16(b[:], v)
 	buf.Write(b[:])
+}
+
+func writeInt16(buf *bytes.Buffer, v int16) {
+	binary.Write(buf, binary.LittleEndian, v)
 }
 
 func writeUint24(buf *bytes.Buffer, v uint32) {
