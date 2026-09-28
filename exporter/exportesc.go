@@ -11,10 +11,11 @@ import (
 )
 
 const (
-	version            byte = 0
-	recordTypePosition byte = 0
-	recordTypeDelta    byte = 1
-	stop                    = 0
+	version              byte = 0
+	recordTypePosition   byte = 0
+	recordTypeDelta      byte = 1
+	recordTypeController byte = 2
+	stop                      = 0
 
 	changeTransponderType byte = 1 << 0
 	changeSquawk          byte = 1 << 1
@@ -25,6 +26,10 @@ const (
 
 	coordDeltaUnit = 1e-4 // degrees per signed lat/lon delta unit
 )
+
+type universalState struct {
+	currentController string
+}
 
 type aircraftState struct {
 	IsNormalMode bool
@@ -38,7 +43,7 @@ type aircraftState struct {
 func Export(records []importer.GenericRecord) []byte {
 	var buf bytes.Buffer
 
-	buf.WriteString("esco")
+	buf.WriteString("skog")
 	buf.WriteByte(version)
 
 	callsignIDs, aircraftIDs := writeRegistries(&buf, records)
@@ -81,53 +86,69 @@ func writeCallsignList(buf *bytes.Buffer, callsigns []string) {
 		buf.WriteString(cs)
 		buf.WriteByte(stop)
 	}
+
 	buf.WriteByte(stop)
 }
 
 func writeRecordStream(buf *bytes.Buffer, records []importer.GenericRecord, callsignIDs map[string]uint8, aircraftIDs map[string]uint16) {
-	last := make(map[uint16]aircraftState)
+	// Aircraft states
+	aircraftStates := make(map[uint16]aircraftState)
+
+	// Universal state
+	currentState := new(universalState)
 
 	for i := 0; i < len(records); {
 		t := records[i].Time
 		j := i
+		// Handle all records with same timestamp in one
 		for j < len(records) && records[j].Time == t {
 			j++
 		}
 
-		wroteHeader := false
+		// Write time header
+		writeUint24(buf, uint32(t/time.Second))
+
 		for _, rec := range records[i:j] {
+			// Write controller change record if necessary
+			if rec.Callsign != currentState.currentController {
+				writeControllerChangeRecord(buf, rec.Callsign, callsignIDs, currentState)
+			}
+
 			pos, ok := rec.Record.(importer.PositionRecord)
 			if !ok {
 				continue
 			}
 
-			if !wroteHeader {
-				writeUint24(buf, uint32(t/time.Second))
-				wroteHeader = true
-			}
-
-			writePositionRecord(buf, rec.Callsign, pos, callsignIDs, aircraftIDs, last)
+			writePositionRecord(buf, pos, aircraftIDs, aircraftStates)
 		}
 
-		if wroteHeader {
-			buf.WriteByte(stop)
-		}
+		// Write timestamp [stop] byte
+		buf.WriteByte(stop)
 
 		i = j
 	}
+
 	buf.WriteByte(stop)
 }
 
-func writePositionRecord(buf *bytes.Buffer, positionCallsign string, pos importer.PositionRecord, callsignIDs map[string]uint8, aircraftIDs map[string]uint16, last map[uint16]aircraftState) {
+func writeControllerChangeRecord(buf *bytes.Buffer, callsign string, callsignIDs map[string]uint8, currentState *universalState) {
+	callsignId := callsignIDs[callsign]
+
+	currentState.currentController = callsign
+
+	buf.WriteByte(recordTypeController)
+	buf.WriteByte(callsignId)
+}
+
+func writePositionRecord(buf *bytes.Buffer, pos importer.PositionRecord, aircraftIDs map[string]uint16, last map[uint16]aircraftState) {
 	aircraftID := aircraftIDs[pos.Callsign]
-	positionID := callsignIDs[positionCallsign]
 	next := stateFrom(pos)
 
 	prev, seen := last[aircraftID]
 	if seen {
 		delta, ok := makeDelta(prev, next)
 		if ok {
-			writeDeltaRecord(buf, positionID, aircraftID, next, delta)
+			writeDeltaRecord(buf, aircraftID, next, delta)
 			last[aircraftID] = applyDelta(prev, next, delta)
 			return
 		}
@@ -135,11 +156,11 @@ func writePositionRecord(buf *bytes.Buffer, positionCallsign string, pos importe
 		log.Printf("aircraft %s (id %d): delta exceeds range, writing type 0", pos.Callsign, aircraftID)
 	}
 
-	writeFullPositionRecord(buf, positionID, aircraftID, next)
+	writeFullPositionRecord(buf, aircraftID, next)
 	last[aircraftID] = next
 }
 
-func writeFullPositionRecord(buf *bytes.Buffer, positionID uint8, aircraftID uint16, state aircraftState) {
+func writeFullPositionRecord(buf *bytes.Buffer, aircraftID uint16, state aircraftState) {
 	buf.WriteByte(recordTypePosition)
 
 	transponder := byte(0)
@@ -148,7 +169,6 @@ func writeFullPositionRecord(buf *bytes.Buffer, positionID uint8, aircraftID uin
 	}
 
 	buf.WriteByte(transponder)
-	buf.WriteByte(positionID)
 	writeUint16(buf, aircraftID)
 	writeUint16(buf, state.Squawk)
 	writeFloat32(buf, state.Latitude)
@@ -226,10 +246,9 @@ func makeDelta(prev aircraftState, next aircraftState) (positionDelta, bool) {
 	return d, true
 }
 
-func writeDeltaRecord(buf *bytes.Buffer, positionID uint8, aircraftID uint16, state aircraftState, d positionDelta) {
+func writeDeltaRecord(buf *bytes.Buffer, aircraftID uint16, state aircraftState, d positionDelta) {
 	buf.WriteByte(recordTypeDelta)
 	buf.WriteByte(d.changeMap)
-	buf.WriteByte(positionID)
 	writeUint16(buf, aircraftID)
 
 	if d.changeMap&changeTransponderType != 0 {

@@ -17,7 +17,7 @@ Planned (though probably will never get round to it), is to expand to include mo
 #### `[header]`
 
 ```
-magic value   4 bytes ("esco")
+magic value   4 bytes ("skog")
 version       1 byte
 ```
 
@@ -86,7 +86,6 @@ record type  1 byte
 
 ```
 transponder type   1 byte
-position id        1 byte
 aircraft id        2 bytes
 squawk             2 bytes  (uint)
 lat                4 bytes
@@ -99,7 +98,6 @@ hdg                2 bytes (uint)
 
 ```
 change map                   1 byte
-position id                  1 byte
 aircraft id                  2 bytes
 (maybe) new transponder type 1 byte
 (maybe) new squawk           2 bytes (uint)
@@ -107,4 +105,10 @@ aircraft id                  2 bytes
 (maybe) lon delta            2 bytes
 (maybe) alt delta            2 bytes
 (maybe) hdg delta            1 byte
+```
+
+#### `[record] (type 2): controller position change`
+
+```
+position id  1 byte
 ```
