@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/AliceFord/es-compress/importer/replay"
+	"github.com/AliceFord/es-compress/record"
 )
 
 func TestParseGenericRecord(t *testing.T) {
@@ -29,7 +30,7 @@ func TestParseGenericRecord(t *testing.T) {
 		t.Errorf("Direction = false, want true")
 	}
 
-	p, ok := got.Record.(replay.PositionRecord)
+	p, ok := got.Record.(record.PositionRecord)
 	if !ok {
 		t.Fatalf("Record type = %T, want PositionRecord", got.Record)
 	}
