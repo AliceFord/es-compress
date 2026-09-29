@@ -166,13 +166,18 @@ func (p *Parser) parseRecordStream(r io.Reader) ([]record.GenericRecord, error) 
 	}
 }
 
-func (p *Parser) parseTimestampRecord(r io.Reader) (time.Duration, error) {
+func (p *Parser) parseTimestampRecord(r io.Reader) error {
 	timestamp, err := readBytes(r, 3)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
-	return time.Duration(timestamp[0])<<16 | time.Duration(timestamp[1])<<8 | time.Duration(timestamp[2]), nil
+	p.currentTimestamp = time.Duration(timestamp[0])<<16 | time.Duration(timestamp[1])<<8 | time.Duration(timestamp[2])
+	return nil
+}
+
+func (p *Parser) parseTimestampPlus1Record(r io.Reader) {
+	p.currentTimestamp += time.Second
 }
 
 func (p *Parser) parseGenericRecord(r io.Reader) (record.GenericRecord, error) {
@@ -211,12 +216,14 @@ func (p *Parser) parseGenericRecord(r io.Reader) (record.GenericRecord, error) {
 
 		return record.GenericRecord{}, err
 	case 3:
-		newTimestamp, err := p.parseTimestampRecord(r)
-		if err != nil {
+		if err := p.parseTimestampRecord(r); err != nil {
 			return record.GenericRecord{}, err
 		}
 
-		p.currentTimestamp = newTimestamp
+		return record.GenericRecord{}, nil
+	case 4:
+		p.parseTimestampPlus1Record(r)
+
 		return record.GenericRecord{}, nil
 	case 0xFF:
 		return record.GenericRecord{}, io.EOF

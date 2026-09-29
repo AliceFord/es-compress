@@ -11,11 +11,12 @@ import (
 )
 
 const (
-	version              byte = 0
-	recordTypePosition   byte = 0
-	recordTypeDelta      byte = 1
-	recordTypeController byte = 2
-	recordTypeTimestamp  byte = 3
+	version                  byte = 0
+	recordTypePosition       byte = 0
+	recordTypeDelta          byte = 1
+	recordTypeController     byte = 2
+	recordTypeTimestamp      byte = 3
+	recordTypeTimestampPlus1 byte = 4
 
 	stop = 0
 
@@ -97,6 +98,8 @@ func writeRecordStream(buf *bytes.Buffer, records []record.GenericRecord, callsi
 	// Universal state
 	currentState := new(universalState)
 
+	var prevTime time.Duration
+
 	for i := 0; i < len(records); {
 		t := records[i].Time
 		j := i
@@ -106,8 +109,12 @@ func writeRecordStream(buf *bytes.Buffer, records []record.GenericRecord, callsi
 		}
 
 		// Write timestamp record
-		buf.WriteByte(recordTypeTimestamp)
-		writeUint24(buf, uint32(t/time.Second))
+		if t-prevTime == time.Second {
+			buf.WriteByte(recordTypeTimestampPlus1)
+		} else {
+			buf.WriteByte(recordTypeTimestamp)
+			writeUint24(buf, uint32(t/time.Second))
+		}
 
 		for _, rec := range records[i:j] {
 			// Write controller change record if necessary
@@ -124,6 +131,7 @@ func writeRecordStream(buf *bytes.Buffer, records []record.GenericRecord, callsi
 		}
 
 		i = j
+		prevTime = t
 	}
 
 	buf.WriteByte(stop)

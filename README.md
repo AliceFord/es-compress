@@ -123,3 +123,7 @@ position id  1 byte
 ```
 time in s  3 bytes (uint)
 ```
+
+#### `[record] (type 4): timestamp +1s`
+
+(Note this record has no content.)

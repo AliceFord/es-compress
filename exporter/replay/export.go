@@ -18,7 +18,7 @@ func Export(records []record.GenericRecord) string {
 
 		encodedHdg := int((float64(positionRecord.Heading)*2.88 + 0.5) * 4)
 
-		fmt.Fprintf(&out, "[%d:%d:%d >>>> %s]\n", int64(rec.Time.Hours()), int64(rec.Time.Minutes())%60, int64(rec.Time.Seconds())%60, rec.Callsign)
+		fmt.Fprintf(&out, "[%02d:%02d:%02d >>>> %s]\n", int64(rec.Time.Hours()), int64(rec.Time.Minutes())%60, int64(rec.Time.Seconds())%60, rec.Callsign)
 		fmt.Fprintf(&out, "@N:%s:%d:1:%f:%f:%d:0:%d:0\n", positionRecord.Callsign, positionRecord.Squawk, positionRecord.Latitude, positionRecord.Longitude, positionRecord.Altitude, encodedHdg)
 	}
 
