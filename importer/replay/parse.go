@@ -147,15 +147,15 @@ func parsePositionRecord(line string) (record.PositionRecord, error) {
 		return record.PositionRecord{}, fmt.Errorf("heading: %w", err)
 	}
 
-	heading := uint64(float64((headingEncoded&0xFFF)>>2) / 2.88)
+	heading := uint16(float64((headingEncoded&0xFFF)>>2) / 2.88)
 
 	return record.PositionRecord{
 		IsNormalMode: isNormalMode,
 		Callsign:     callsign,
-		Squawk:       squawk,
+		Squawk:       uint16(squawk),
 		Latitude:     latitude,
 		Longitude:    longitude,
-		Altitude:     altitude,
+		Altitude:     uint16(altitude),
 		Heading:      heading,
 	}, nil
 }

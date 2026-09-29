@@ -15,7 +15,9 @@ const (
 	recordTypePosition   byte = 0
 	recordTypeDelta      byte = 1
 	recordTypeController byte = 2
-	stop                      = 0
+	recordTypeTimestamp  byte = 3
+
+	stop = 0
 
 	changeTransponderType byte = 1 << 0
 	changeSquawk          byte = 1 << 1
@@ -103,7 +105,8 @@ func writeRecordStream(buf *bytes.Buffer, records []record.GenericRecord, callsi
 			j++
 		}
 
-		// Write time header
+		// Write timestamp record
+		buf.WriteByte(recordTypeTimestamp)
 		writeUint24(buf, uint32(t/time.Second))
 
 		for _, rec := range records[i:j] {
@@ -119,9 +122,6 @@ func writeRecordStream(buf *bytes.Buffer, records []record.GenericRecord, callsi
 
 			writePositionRecord(buf, pos, aircraftIDs, aircraftStates)
 		}
-
-		// Write timestamp [stop] byte
-		buf.WriteByte(stop)
 
 		i = j
 	}

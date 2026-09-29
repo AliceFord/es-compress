@@ -20,11 +20,11 @@ type Record interface {
 type PositionRecord struct {
 	IsNormalMode bool
 	Callsign     string
-	Squawk       uint64
+	Squawk       uint16
 	Latitude     float64
 	Longitude    float64
-	Altitude     uint64
-	Heading      uint64
+	Altitude     uint16
+	Heading      uint16
 }
 
 func (PositionRecord) isPosition() {}
