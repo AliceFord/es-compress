@@ -71,6 +71,27 @@ func readVarint(r io.Reader) (int32, error) {
 	return int32(v), nil
 }
 
+func readUvarint(r io.Reader) (uint16, error) {
+	var br io.ByteReader
+
+	if b, ok := r.(io.ByteReader); ok {
+		br = b
+	} else {
+		br = &byteReader{r: r}
+	}
+
+	v, err := binary.ReadUvarint(br)
+	if err != nil {
+		return 0, err
+	}
+
+	if v > math.MaxUint16 {
+		return 0, fmt.Errorf("varint out of uint16 range: %d", v)
+	}
+
+	return uint16(v), nil
+}
+
 type byteReader struct {
 	r io.Reader
 }
@@ -355,17 +376,16 @@ func (p *Parser) parsePositionRecordDelta(r io.Reader) (record.PositionRecord, e
 	}
 	changeMapValue := changeMap[0]
 
-	aircraftId, err := readBytes(r, 2)
+	aircraftId, err := readUvarint(r)
 	if err != nil {
 		return record.PositionRecord{}, err
 	}
-	aircraftIDValue := binary.LittleEndian.Uint16(aircraftId)
 
-	callsign, ok := p.aircraftMap[aircraftIDValue]
+	callsign, ok := p.aircraftMap[aircraftId]
 	if !ok {
 		return record.PositionRecord{}, fmt.Errorf(
 			"unknown aircraft: %d",
-			aircraftIDValue,
+			aircraftId,
 		)
 	}
 
@@ -373,7 +393,7 @@ func (p *Parser) parsePositionRecordDelta(r io.Reader) (record.PositionRecord, e
 	if !ok {
 		return record.PositionRecord{}, fmt.Errorf(
 			"no previous state for aircraft: %d",
-			aircraftIDValue,
+			aircraftId,
 		)
 	}
 

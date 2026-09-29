@@ -89,7 +89,7 @@ hdg               2 bytes (uint)
 
 ```
 [change map]                   1 byte 
-aircraft id                  2 bytes (uint)
+aircraft id                  ? bytes (uvarint)
 (maybe) new transponder type 1 byte  (bool)
 (maybe) new squawk           2 bytes (uint)
 (maybe) lat delta            ? bytes (varint)

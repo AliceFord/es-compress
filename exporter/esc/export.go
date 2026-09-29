@@ -153,7 +153,7 @@ func writePositionRecord(buf *bytes.Buffer, pos record.PositionRecord, aircraftI
 		delta := makeDelta(prev, next)
 		writeDeltaRecord(buf, aircraftID, next, delta)
 
-		last[aircraftID] = applyDelta(prev, next, delta)
+		last[aircraftID] = applyDelta(prev, delta)
 		return
 
 		// log.Printf("aircraft %s (id %d): delta exceeds range, writing type 0", pos.Callsign, aircraftID)
@@ -234,7 +234,7 @@ func writeDeltaRecord(
 ) {
 	buf.WriteByte(recordTypeDelta)
 	buf.WriteByte(d.changeMap)
-	writeUint16(buf, aircraftID)
+	writeUvarint(buf, uint32(aircraftID))
 
 	if d.changeMap&changeTransponderType != 0 {
 		if d.isNormalMode {
@@ -265,7 +265,7 @@ func writeDeltaRecord(
 	}
 }
 
-func applyDelta(prev aircraftState, next aircraftState, d positionDelta) aircraftState {
+func applyDelta(prev aircraftState, d positionDelta) aircraftState {
 	out := prev
 
 	if d.changeMap&changeTransponderType != 0 {
@@ -326,5 +326,11 @@ func writeUint24(buf *bytes.Buffer, v uint32) {
 func writeVarint(buf *bytes.Buffer, v int32) {
 	var b [binary.MaxVarintLen32]byte
 	n := binary.PutVarint(b[:], int64(v))
+	buf.Write(b[:n])
+}
+
+func writeUvarint(buf *bytes.Buffer, v uint32) {
+	var b [binary.MaxVarintLen32]byte
+	n := binary.PutUvarint(b[:], uint64(v))
 	buf.Write(b[:n])
 }
