@@ -12,6 +12,18 @@ import (
 )
 
 const (
+	recordTypePosition       byte = 0
+	recordTypeDelta          byte = 1 // Generic delta with explicit change map
+	recordTypeController     byte = 2
+	recordTypeTimestamp      byte = 3
+	recordTypeTimestampPlus1 byte = 4
+
+	recordTypeDeltaNone         byte = 5
+	recordTypeDeltaLatLon       byte = 6
+	recordTypeDeltaLatLonAlt    byte = 7
+	recordTypeDeltaLatLonAltHdg byte = 8
+	recordTypeDeltaLatLonHdg    byte = 9
+
 	changeTransponderType byte = 1 << 0
 	changeSquawk          byte = 1 << 1
 	changeLat             byte = 1 << 2
@@ -156,7 +168,7 @@ func (p *Parser) parseHeader(r io.Reader) error {
 }
 
 func (p *Parser) parseCallsignRegistry(r io.Reader) error {
-	var callsignId uint8
+	var callsignID uint8
 	p.callsignMap = make(map[uint8]string)
 
 	for {
@@ -165,18 +177,18 @@ func (p *Parser) parseCallsignRegistry(r io.Reader) error {
 			return err
 		}
 
-		// Empty string == [stop] byte
+		// Empty string == [stop] byte.
 		if callsign == "" {
 			return nil
 		}
 
-		p.callsignMap[callsignId] = callsign
-		callsignId++
+		p.callsignMap[callsignID] = callsign
+		callsignID++
 	}
 }
 
 func (p *Parser) parseAircraftRegistry(r io.Reader) error {
-	var aircraftId uint16
+	var aircraftID uint16
 	p.aircraftMap = make(map[uint16]string)
 
 	for {
@@ -185,13 +197,13 @@ func (p *Parser) parseAircraftRegistry(r io.Reader) error {
 			return err
 		}
 
-		// Empty string == [stop] byte
+		// Empty string == [stop] byte.
 		if callsign == "" {
 			return nil
 		}
 
-		p.aircraftMap[aircraftId] = callsign
-		aircraftId++
+		p.aircraftMap[aircraftID] = callsign
+		aircraftID++
 	}
 }
 
@@ -210,7 +222,7 @@ func (p *Parser) parseRecordStream(r io.Reader) ([]record.GenericRecord, error) 
 			return nil, err
 		}
 
-		// For now we use no callsign <--> no error but no record either.
+		// No callsign means no error, but no record either.
 		if genericRecord.Callsign == "" {
 			continue
 		}
@@ -251,7 +263,7 @@ func (p *Parser) parseGenericRecord(r io.Reader) (record.GenericRecord, error) {
 	}
 
 	switch recordType[0] {
-	case 0:
+	case recordTypePosition:
 		posRecord, err := p.parsePositionRecord(r)
 		if err != nil {
 			return record.GenericRecord{}, err
@@ -259,33 +271,100 @@ func (p *Parser) parseGenericRecord(r io.Reader) (record.GenericRecord, error) {
 
 		genericRecord.Record = posRecord
 		return genericRecord, nil
-	case 1:
-		posRecord, err := p.parsePositionRecordDelta(r)
+
+	case recordTypeDelta:
+		changeMap, err := readBytes(r, 1)
+		if err != nil {
+			return record.GenericRecord{}, err
+		}
+
+		posRecord, err := p.parsePositionRecordDelta(r, changeMap[0])
 		if err != nil {
 			return record.GenericRecord{}, err
 		}
 
 		genericRecord.Record = posRecord
 		return genericRecord, nil
-	case 2:
-		err := p.parseControllerPositionChange(r)
+
+	case recordTypeDeltaNone:
+		posRecord, err := p.parsePositionRecordDelta(r, 0)
 		if err != nil {
 			return record.GenericRecord{}, err
 		}
 
-		return record.GenericRecord{}, err
-	case 3:
+		genericRecord.Record = posRecord
+		return genericRecord, nil
+
+	case recordTypeDeltaLatLon:
+		posRecord, err := p.parsePositionRecordDelta(
+			r,
+			changeLat|changeLon,
+		)
+		if err != nil {
+			return record.GenericRecord{}, err
+		}
+
+		genericRecord.Record = posRecord
+		return genericRecord, nil
+
+	case recordTypeDeltaLatLonAlt:
+		posRecord, err := p.parsePositionRecordDelta(
+			r,
+			changeLat|changeLon|changeAlt,
+		)
+		if err != nil {
+			return record.GenericRecord{}, err
+		}
+
+		genericRecord.Record = posRecord
+		return genericRecord, nil
+
+	case recordTypeDeltaLatLonAltHdg:
+		posRecord, err := p.parsePositionRecordDelta(
+			r,
+			changeLat|changeLon|changeAlt|changeHdg,
+		)
+		if err != nil {
+			return record.GenericRecord{}, err
+		}
+
+		genericRecord.Record = posRecord
+		return genericRecord, nil
+
+	case recordTypeDeltaLatLonHdg:
+		posRecord, err := p.parsePositionRecordDelta(
+			r,
+			changeLat|changeLon|changeHdg,
+		)
+		if err != nil {
+			return record.GenericRecord{}, err
+		}
+
+		genericRecord.Record = posRecord
+		return genericRecord, nil
+
+	case recordTypeController:
+		if err := p.parseControllerPositionChange(r); err != nil {
+			return record.GenericRecord{}, err
+		}
+
+		return record.GenericRecord{}, nil
+
+	case recordTypeTimestamp:
 		if err := p.parseTimestampRecord(r); err != nil {
 			return record.GenericRecord{}, err
 		}
 
 		return record.GenericRecord{}, nil
-	case 4:
+
+	case recordTypeTimestampPlus1:
 		p.parseTimestampPlus1Record()
 
 		return record.GenericRecord{}, nil
+
 	case 0xFF:
 		return record.GenericRecord{}, io.EOF
+
 	default:
 		return record.GenericRecord{}, fmt.Errorf(
 			"unknown record type: %d",
@@ -302,18 +381,20 @@ func (p *Parser) parsePositionRecord(r io.Reader) (record.PositionRecord, error)
 
 	isNormalMode := transponderType[0]&1 == 1
 
-	aircraftId, err := readBytes(r, 2)
+	// Aircraft IDs are encoded as uvarints.
+	aircraftID, err := readUvarint(r)
 	if err != nil {
-		return record.PositionRecord{}, err
+		return record.PositionRecord{}, fmt.Errorf(
+			"reading aircraft ID: %w",
+			err,
+		)
 	}
 
-	aircraftIDValue := binary.LittleEndian.Uint16(aircraftId)
-
-	callsign, ok := p.aircraftMap[aircraftIDValue]
+	callsign, ok := p.aircraftMap[aircraftID]
 	if !ok {
 		return record.PositionRecord{}, fmt.Errorf(
 			"unknown aircraft: %d",
-			aircraftIDValue,
+			aircraftID,
 		)
 	}
 
@@ -369,23 +450,23 @@ func (p *Parser) parsePositionRecord(r io.Reader) (record.PositionRecord, error)
 	}, nil
 }
 
-func (p *Parser) parsePositionRecordDelta(r io.Reader) (record.PositionRecord, error) {
-	changeMap, err := readBytes(r, 1)
+func (p *Parser) parsePositionRecordDelta(
+	r io.Reader,
+	changeMap byte,
+) (record.PositionRecord, error) {
+	aircraftID, err := readUvarint(r)
 	if err != nil {
-		return record.PositionRecord{}, err
-	}
-	changeMapValue := changeMap[0]
-
-	aircraftId, err := readUvarint(r)
-	if err != nil {
-		return record.PositionRecord{}, err
+		return record.PositionRecord{}, fmt.Errorf(
+			"reading aircraft ID: %w",
+			err,
+		)
 	}
 
-	callsign, ok := p.aircraftMap[aircraftId]
+	callsign, ok := p.aircraftMap[aircraftID]
 	if !ok {
 		return record.PositionRecord{}, fmt.Errorf(
 			"unknown aircraft: %d",
-			aircraftId,
+			aircraftID,
 		)
 	}
 
@@ -393,11 +474,11 @@ func (p *Parser) parsePositionRecordDelta(r io.Reader) (record.PositionRecord, e
 	if !ok {
 		return record.PositionRecord{}, fmt.Errorf(
 			"no previous state for aircraft: %d",
-			aircraftId,
+			aircraftID,
 		)
 	}
 
-	if changeMapValue&changeTransponderType != 0 {
+	if changeMap&changeTransponderType != 0 {
 		transponderType, err := readBytes(r, 1)
 		if err != nil {
 			return record.PositionRecord{}, err
@@ -406,7 +487,7 @@ func (p *Parser) parsePositionRecordDelta(r io.Reader) (record.PositionRecord, e
 		acState.IsNormalMode = transponderType[0]&1 == 1
 	}
 
-	if changeMapValue&changeSquawk != 0 {
+	if changeMap&changeSquawk != 0 {
 		squawk, err := readBytes(r, 2)
 		if err != nil {
 			return record.PositionRecord{}, err
@@ -415,7 +496,7 @@ func (p *Parser) parsePositionRecordDelta(r io.Reader) (record.PositionRecord, e
 		acState.Squawk = binary.LittleEndian.Uint16(squawk)
 	}
 
-	if changeMapValue&changeLat != 0 {
+	if changeMap&changeLat != 0 {
 		delta, err := readVarint(r)
 		if err != nil {
 			return record.PositionRecord{}, fmt.Errorf(
@@ -427,7 +508,7 @@ func (p *Parser) parsePositionRecordDelta(r io.Reader) (record.PositionRecord, e
 		acState.Latitude += delta
 	}
 
-	if changeMapValue&changeLon != 0 {
+	if changeMap&changeLon != 0 {
 		delta, err := readVarint(r)
 		if err != nil {
 			return record.PositionRecord{}, fmt.Errorf(
@@ -439,7 +520,7 @@ func (p *Parser) parsePositionRecordDelta(r io.Reader) (record.PositionRecord, e
 		acState.Longitude += delta
 	}
 
-	if changeMapValue&changeAlt != 0 {
+	if changeMap&changeAlt != 0 {
 		delta, err := readVarint(r)
 		if err != nil {
 			return record.PositionRecord{}, fmt.Errorf(
@@ -448,10 +529,12 @@ func (p *Parser) parsePositionRecordDelta(r io.Reader) (record.PositionRecord, e
 			)
 		}
 
-		acState.Altitude = uint16(int32(acState.Altitude) + delta)
+		acState.Altitude = uint16(
+			int32(acState.Altitude) + delta,
+		)
 	}
 
-	if changeMapValue&changeHdg != 0 {
+	if changeMap&changeHdg != 0 {
 		delta, err := readVarint(r)
 		if err != nil {
 			return record.PositionRecord{}, fmt.Errorf(
@@ -460,7 +543,9 @@ func (p *Parser) parsePositionRecordDelta(r io.Reader) (record.PositionRecord, e
 			)
 		}
 
-		acState.Heading = uint16(int32(acState.Heading) + delta)
+		acState.Heading = uint16(
+			int32(acState.Heading) + delta,
+		)
 	}
 
 	p.aircraftStates[callsign] = acState
@@ -477,11 +562,11 @@ func (p *Parser) parsePositionRecordDelta(r io.Reader) (record.PositionRecord, e
 }
 
 func (p *Parser) parseControllerPositionChange(r io.Reader) error {
-	controllerId, err := readBytes(r, 1)
+	controllerID, err := readBytes(r, 1)
 	if err != nil {
 		return err
 	}
 
-	p.currentCallsign = p.callsignMap[controllerId[0]]
+	p.currentCallsign = p.callsignMap[controllerID[0]]
 	return nil
 }

@@ -77,7 +77,7 @@ record type  1 byte
 
 ```
 transponder type  1 byte  (bool)
-aircraft id       2 bytes (uint)
+aircraft id       ? bytes (uvarint)
 squawk            2 bytes (uint)
 lat               4 bytes (int, actual lat * 100000)
 lon               4 bytes (int, actual lon * 100000)
@@ -127,3 +127,13 @@ time in s  3 bytes (uint)
 #### `[record] (type 4): timestamp +1s`
 
 (Note this record has no content.)
+
+#### `[record] (type 5): type 1, with change map none`
+
+#### `[record] (type 6): type 1, with change map lat lon`
+
+#### `[record] (type 7): type 1, with change map lat lon alt`
+
+#### `[record] (type 8): type 1, with change map lat lon alt hdg`
+
+#### `[record] (type 8): type 1, with change map lat lon hdg`
