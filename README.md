@@ -87,9 +87,9 @@ record type  1 byte
 ```
 transponder type   1 byte
 aircraft id        2 bytes
-squawk             2 bytes  (uint)
-lat                4 bytes
-lon                4 bytes
+squawk             2 bytes (uint)
+lat                4 bytes (int, actual lat * 100000)
+lon                4 bytes (int, actual lon * 100000)
 alt                2 bytes (uint)
 hdg                2 bytes (uint)
 ```

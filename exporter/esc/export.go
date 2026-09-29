@@ -23,8 +23,6 @@ const (
 	changeLon             byte = 1 << 3
 	changeAlt             byte = 1 << 4
 	changeHdg             byte = 1 << 5
-
-	coordDeltaUnit = 1e-4 // degrees per signed lat/lon delta unit
 )
 
 type universalState struct {
@@ -34,8 +32,8 @@ type universalState struct {
 type aircraftState struct {
 	IsNormalMode bool
 	Squawk       uint16
-	Latitude     float32
-	Longitude    float32
+	Latitude     int32
+	Longitude    int32
 	Altitude     uint16
 	Heading      uint16
 }
@@ -171,8 +169,8 @@ func writeFullPositionRecord(buf *bytes.Buffer, aircraftID uint16, state aircraf
 	buf.WriteByte(transponder)
 	writeUint16(buf, aircraftID)
 	writeUint16(buf, state.Squawk)
-	writeFloat32(buf, state.Latitude)
-	writeFloat32(buf, state.Longitude)
+	writeInt32(buf, state.Latitude)
+	writeInt32(buf, state.Longitude)
 	writeUint16(buf, state.Altitude)
 	writeUint16(buf, state.Heading)
 }
@@ -200,7 +198,7 @@ func makeDelta(prev aircraftState, next aircraftState) (positionDelta, bool) {
 		d.squawk = next.Squawk
 	}
 
-	lat, ok := coordDelta(next.Latitude - prev.Latitude)
+	lat, ok := int16Delta(int(next.Latitude - prev.Latitude))
 	if !ok {
 		log.Printf("lat")
 		return positionDelta{}, false
@@ -211,7 +209,7 @@ func makeDelta(prev aircraftState, next aircraftState) (positionDelta, bool) {
 		d.lat = lat
 	}
 
-	lon, ok := coordDelta(next.Longitude - prev.Longitude)
+	lon, ok := int16Delta(int(next.Longitude - prev.Longitude))
 	if !ok {
 		log.Printf("lon")
 		return positionDelta{}, false
@@ -293,11 +291,11 @@ func applyDelta(prev aircraftState, next aircraftState, d positionDelta) aircraf
 	}
 
 	if d.changeMap&changeLat != 0 {
-		out.Latitude += float32(d.lat) * coordDeltaUnit
+		out.Latitude += int32(d.lat)
 	}
 
 	if d.changeMap&changeLon != 0 {
-		out.Longitude += float32(d.lon) * coordDeltaUnit
+		out.Longitude += int32(d.lon)
 	}
 
 	if d.changeMap&changeAlt != 0 {
@@ -315,15 +313,11 @@ func stateFrom(pos record.PositionRecord) aircraftState {
 	return aircraftState{
 		IsNormalMode: pos.IsNormalMode,
 		Squawk:       uint16(pos.Squawk),
-		Latitude:     float32(pos.Latitude),
-		Longitude:    float32(pos.Longitude),
+		Latitude:     int32(pos.Latitude * 100000),
+		Longitude:    int32(pos.Longitude * 100000),
 		Altitude:     uint16(pos.Altitude),
 		Heading:      uint16(pos.Heading),
 	}
-}
-
-func coordDelta(diff float32) (int16, bool) {
-	return int16Delta(int(math.Round(float64(diff) / coordDeltaUnit)))
 }
 
 func int8Delta(diff int) (int8, bool) {
@@ -342,6 +336,10 @@ func int16Delta(diff int) (int16, bool) {
 	return int16(diff), true
 }
 
+func writeInt32(buf *bytes.Buffer, v int32) {
+	binary.Write(buf, binary.LittleEndian, v)
+}
+
 func writeUint16(buf *bytes.Buffer, v uint16) {
 	var b [2]byte
 
@@ -357,11 +355,4 @@ func writeUint24(buf *bytes.Buffer, v uint32) {
 	buf.WriteByte(byte(v))
 	buf.WriteByte(byte(v >> 8))
 	buf.WriteByte(byte(v >> 16))
-}
-
-func writeFloat32(buf *bytes.Buffer, v float32) {
-	var b [4]byte
-
-	binary.LittleEndian.PutUint32(b[:], math.Float32bits(v))
-	buf.Write(b[:])
 }
