@@ -3,8 +3,6 @@ package esc
 import (
 	"bytes"
 	"encoding/binary"
-	"log"
-	"math"
 	"time"
 
 	"github.com/AliceFord/es-compress/record"
@@ -152,14 +150,13 @@ func writePositionRecord(buf *bytes.Buffer, pos record.PositionRecord, aircraftI
 
 	prev, seen := last[aircraftID]
 	if seen {
-		delta, ok := makeDelta(prev, next)
-		if ok {
-			writeDeltaRecord(buf, aircraftID, next, delta)
-			last[aircraftID] = applyDelta(prev, next, delta)
-			return
-		}
+		delta := makeDelta(prev, next)
+		writeDeltaRecord(buf, aircraftID, next, delta)
 
-		log.Printf("aircraft %s (id %d): delta exceeds range, writing type 0", pos.Callsign, aircraftID)
+		last[aircraftID] = applyDelta(prev, next, delta)
+		return
+
+		// log.Printf("aircraft %s (id %d): delta exceeds range, writing type 0", pos.Callsign, aircraftID)
 	}
 
 	writeFullPositionRecord(buf, aircraftID, next)
@@ -187,13 +184,13 @@ type positionDelta struct {
 	changeMap    byte
 	isNormalMode bool
 	squawk       uint16
-	lat          int16
-	lon          int16
-	alt          int16
-	hdg          int8
+	lat          int32
+	lon          int32
+	alt          int32
+	hdg          int32
 }
 
-func makeDelta(prev aircraftState, next aircraftState) (positionDelta, bool) {
+func makeDelta(prev aircraftState, next aircraftState) positionDelta {
 	var d positionDelta
 
 	if next.IsNormalMode != prev.IsNormalMode {
@@ -206,62 +203,44 @@ func makeDelta(prev aircraftState, next aircraftState) (positionDelta, bool) {
 		d.squawk = next.Squawk
 	}
 
-	lat, ok := int16Delta(int(next.Latitude - prev.Latitude))
-	if !ok {
-		log.Printf("lat")
-		return positionDelta{}, false
-	}
-
-	if lat != 0 {
+	d.lat = next.Latitude - prev.Latitude
+	if d.lat != 0 {
 		d.changeMap |= changeLat
-		d.lat = lat
 	}
 
-	lon, ok := int16Delta(int(next.Longitude - prev.Longitude))
-	if !ok {
-		log.Printf("lon")
-		return positionDelta{}, false
-	}
-
-	if lon != 0 {
+	d.lon = next.Longitude - prev.Longitude
+	if d.lon != 0 {
 		d.changeMap |= changeLon
-		d.lon = lon
 	}
 
-	alt, ok := int16Delta(int(next.Altitude) - int(prev.Altitude))
-	if !ok {
-		log.Printf("alt")
-		return positionDelta{}, false
-	}
-
-	if alt != 0 {
+	d.alt = int32(next.Altitude) - int32(prev.Altitude)
+	if d.alt != 0 {
 		d.changeMap |= changeAlt
-		d.alt = alt
 	}
 
-	hdg, ok := int8Delta(int(next.Heading) - int(prev.Heading))
-	if !ok {
-		return positionDelta{}, false
-	}
-
-	if hdg != 0 {
+	d.hdg = int32(next.Heading) - int32(prev.Heading)
+	if d.hdg != 0 {
 		d.changeMap |= changeHdg
-		d.hdg = hdg
 	}
 
-	return d, true
+	return d
 }
 
-func writeDeltaRecord(buf *bytes.Buffer, aircraftID uint16, state aircraftState, d positionDelta) {
+func writeDeltaRecord(
+	buf *bytes.Buffer,
+	aircraftID uint16,
+	state aircraftState,
+	d positionDelta,
+) {
 	buf.WriteByte(recordTypeDelta)
 	buf.WriteByte(d.changeMap)
 	writeUint16(buf, aircraftID)
 
 	if d.changeMap&changeTransponderType != 0 {
 		if d.isNormalMode {
-			buf.WriteByte(0b1)
+			buf.WriteByte(1)
 		} else {
-			buf.WriteByte(0b0)
+			buf.WriteByte(0)
 		}
 	}
 
@@ -270,48 +249,47 @@ func writeDeltaRecord(buf *bytes.Buffer, aircraftID uint16, state aircraftState,
 	}
 
 	if d.changeMap&changeLat != 0 {
-		writeInt16(buf, d.lat)
+		writeVarint(buf, d.lat)
 	}
 
 	if d.changeMap&changeLon != 0 {
-		writeInt16(buf, d.lon)
+		writeVarint(buf, d.lon)
 	}
 
 	if d.changeMap&changeAlt != 0 {
-		writeInt16(buf, d.alt)
+		writeVarint(buf, d.alt)
 	}
 
 	if d.changeMap&changeHdg != 0 {
-		buf.WriteByte(byte(d.hdg))
+		writeVarint(buf, d.hdg)
 	}
 }
 
 func applyDelta(prev aircraftState, next aircraftState, d positionDelta) aircraftState {
 	out := prev
-	out.IsNormalMode = next.IsNormalMode
-
-	if d.changeMap&changeSquawk != 0 {
-		out.Squawk = d.squawk
-	}
 
 	if d.changeMap&changeTransponderType != 0 {
 		out.IsNormalMode = d.isNormalMode
 	}
 
+	if d.changeMap&changeSquawk != 0 {
+		out.Squawk = d.squawk
+	}
+
 	if d.changeMap&changeLat != 0 {
-		out.Latitude += int32(d.lat)
+		out.Latitude += d.lat
 	}
 
 	if d.changeMap&changeLon != 0 {
-		out.Longitude += int32(d.lon)
+		out.Longitude += d.lon
 	}
 
 	if d.changeMap&changeAlt != 0 {
-		out.Altitude = uint16(int(out.Altitude) + int(d.alt))
+		out.Altitude = uint16(int32(out.Altitude) + d.alt)
 	}
 
 	if d.changeMap&changeHdg != 0 {
-		out.Heading = uint16(int(out.Heading) + int(d.hdg))
+		out.Heading = uint16(int32(out.Heading) + d.hdg)
 	}
 
 	return out
@@ -328,22 +306,6 @@ func stateFrom(pos record.PositionRecord) aircraftState {
 	}
 }
 
-func int8Delta(diff int) (int8, bool) {
-	if diff < math.MinInt8 || diff > math.MaxInt8 {
-		return 0, false
-	}
-
-	return int8(diff), true
-}
-
-func int16Delta(diff int) (int16, bool) {
-	if diff < math.MinInt16 || diff > math.MaxInt16 {
-		return 0, false
-	}
-
-	return int16(diff), true
-}
-
 func writeInt32(buf *bytes.Buffer, v int32) {
 	binary.Write(buf, binary.LittleEndian, v)
 }
@@ -355,12 +317,14 @@ func writeUint16(buf *bytes.Buffer, v uint16) {
 	buf.Write(b[:])
 }
 
-func writeInt16(buf *bytes.Buffer, v int16) {
-	binary.Write(buf, binary.LittleEndian, v)
-}
-
 func writeUint24(buf *bytes.Buffer, v uint32) {
 	buf.WriteByte(byte(v))
 	buf.WriteByte(byte(v >> 8))
 	buf.WriteByte(byte(v >> 16))
+}
+
+func writeVarint(buf *bytes.Buffer, v int32) {
+	var b [binary.MaxVarintLen32]byte
+	n := binary.PutVarint(b[:], int64(v))
+	buf.Write(b[:n])
 }

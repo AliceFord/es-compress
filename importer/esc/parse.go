@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/AliceFord/es-compress/record"
@@ -47,6 +48,37 @@ func readBytes(r io.Reader, n int) ([]byte, error) {
 	_, err := io.ReadFull(r, buf)
 
 	return buf, err
+}
+
+func readVarint(r io.Reader) (int32, error) {
+	var br io.ByteReader
+
+	if b, ok := r.(io.ByteReader); ok {
+		br = b
+	} else {
+		br = &byteReader{r: r}
+	}
+
+	v, err := binary.ReadVarint(br)
+	if err != nil {
+		return 0, err
+	}
+
+	if v < math.MinInt32 || v > math.MaxInt32 {
+		return 0, fmt.Errorf("varint out of int32 range: %d", v)
+	}
+
+	return int32(v), nil
+}
+
+type byteReader struct {
+	r io.Reader
+}
+
+func (r *byteReader) ReadByte() (byte, error) {
+	var b [1]byte
+	_, err := io.ReadFull(r.r, b[:])
+	return b[0], err
 }
 
 func readCString(r io.Reader) (string, error) {
@@ -172,11 +204,17 @@ func (p *Parser) parseTimestampRecord(r io.Reader) error {
 		return err
 	}
 
-	p.currentTimestamp = time.Duration(timestamp[0])<<16 | time.Duration(timestamp[1])<<8 | time.Duration(timestamp[2])
+	p.currentTimestamp =
+		time.Duration(timestamp[0]) |
+			time.Duration(timestamp[1])<<8 |
+			time.Duration(timestamp[2])<<16
+
+	p.currentTimestamp *= time.Second
+
 	return nil
 }
 
-func (p *Parser) parseTimestampPlus1Record(r io.Reader) {
+func (p *Parser) parseTimestampPlus1Record() {
 	p.currentTimestamp += time.Second
 }
 
@@ -222,13 +260,16 @@ func (p *Parser) parseGenericRecord(r io.Reader) (record.GenericRecord, error) {
 
 		return record.GenericRecord{}, nil
 	case 4:
-		p.parseTimestampPlus1Record(r)
+		p.parseTimestampPlus1Record()
 
 		return record.GenericRecord{}, nil
 	case 0xFF:
 		return record.GenericRecord{}, io.EOF
 	default:
-		return record.GenericRecord{}, fmt.Errorf("unknown record type: %d", recordType[0])
+		return record.GenericRecord{}, fmt.Errorf(
+			"unknown record type: %d",
+			recordType[0],
+		)
 	}
 }
 
@@ -237,6 +278,7 @@ func (p *Parser) parsePositionRecord(r io.Reader) (record.PositionRecord, error)
 	if err != nil {
 		return record.PositionRecord{}, err
 	}
+
 	isNormalMode := transponderType[0]&1 == 1
 
 	aircraftId, err := readBytes(r, 2)
@@ -244,9 +286,14 @@ func (p *Parser) parsePositionRecord(r io.Reader) (record.PositionRecord, error)
 		return record.PositionRecord{}, err
 	}
 
-	callsign, ok := p.aircraftMap[binary.LittleEndian.Uint16(aircraftId)]
+	aircraftIDValue := binary.LittleEndian.Uint16(aircraftId)
+
+	callsign, ok := p.aircraftMap[aircraftIDValue]
 	if !ok {
-		return record.PositionRecord{}, fmt.Errorf("unknown aircraft: %d", binary.LittleEndian.Uint16(aircraftId))
+		return record.PositionRecord{}, fmt.Errorf(
+			"unknown aircraft: %d",
+			aircraftIDValue,
+		)
 	}
 
 	squawk, err := readBytes(r, 2)
@@ -259,13 +306,15 @@ func (p *Parser) parsePositionRecord(r io.Reader) (record.PositionRecord, error)
 	if err != nil {
 		return record.PositionRecord{}, err
 	}
-	latValue := float64(int32(binary.LittleEndian.Uint32(lat))) / 100000.0
+	latRaw := int32(binary.LittleEndian.Uint32(lat))
+	latValue := float64(latRaw) / 100000.0
 
 	lon, err := readBytes(r, 4)
 	if err != nil {
 		return record.PositionRecord{}, err
 	}
-	lonValue := float64(int32(binary.LittleEndian.Uint32(lon))) / 100000.0
+	lonRaw := int32(binary.LittleEndian.Uint32(lon))
+	lonValue := float64(lonRaw) / 100000.0
 
 	alt, err := readBytes(r, 2)
 	if err != nil {
@@ -282,8 +331,8 @@ func (p *Parser) parsePositionRecord(r io.Reader) (record.PositionRecord, error)
 	p.aircraftStates[callsign] = aircraftState{
 		IsNormalMode: isNormalMode,
 		Squawk:       squawkValue,
-		Latitude:     int32(binary.LittleEndian.Uint32(lat)),
-		Longitude:    int32(binary.LittleEndian.Uint32(lon)),
+		Latitude:     latRaw,
+		Longitude:    lonRaw,
 		Altitude:     altValue,
 		Heading:      hdgValue,
 	}
@@ -310,11 +359,22 @@ func (p *Parser) parsePositionRecordDelta(r io.Reader) (record.PositionRecord, e
 	if err != nil {
 		return record.PositionRecord{}, err
 	}
-	callsign := p.aircraftMap[binary.LittleEndian.Uint16(aircraftId)]
+	aircraftIDValue := binary.LittleEndian.Uint16(aircraftId)
+
+	callsign, ok := p.aircraftMap[aircraftIDValue]
+	if !ok {
+		return record.PositionRecord{}, fmt.Errorf(
+			"unknown aircraft: %d",
+			aircraftIDValue,
+		)
+	}
 
 	acState, ok := p.aircraftStates[callsign]
 	if !ok {
-		return record.PositionRecord{}, fmt.Errorf("unknown aircraft: %d", binary.LittleEndian.Uint16(aircraftId))
+		return record.PositionRecord{}, fmt.Errorf(
+			"no previous state for aircraft: %d",
+			aircraftIDValue,
+		)
 	}
 
 	if changeMapValue&changeTransponderType != 0 {
@@ -322,6 +382,7 @@ func (p *Parser) parsePositionRecordDelta(r io.Reader) (record.PositionRecord, e
 		if err != nil {
 			return record.PositionRecord{}, err
 		}
+
 		acState.IsNormalMode = transponderType[0]&1 == 1
 	}
 
@@ -330,47 +391,56 @@ func (p *Parser) parsePositionRecordDelta(r io.Reader) (record.PositionRecord, e
 		if err != nil {
 			return record.PositionRecord{}, err
 		}
+
 		acState.Squawk = binary.LittleEndian.Uint16(squawk)
 	}
 
 	if changeMapValue&changeLat != 0 {
-		latDelta, err := readBytes(r, 2)
+		delta, err := readVarint(r)
 		if err != nil {
-			return record.PositionRecord{}, err
+			return record.PositionRecord{}, fmt.Errorf(
+				"reading latitude delta: %w",
+				err,
+			)
 		}
-		latDeltaValue := int16(binary.LittleEndian.Uint16(latDelta))
 
-		acState.Latitude += int32(latDeltaValue)
+		acState.Latitude += delta
 	}
 
 	if changeMapValue&changeLon != 0 {
-		lonDelta, err := readBytes(r, 2)
+		delta, err := readVarint(r)
 		if err != nil {
-			return record.PositionRecord{}, err
+			return record.PositionRecord{}, fmt.Errorf(
+				"reading longitude delta: %w",
+				err,
+			)
 		}
-		lonDeltaValue := int16(binary.LittleEndian.Uint16(lonDelta))
 
-		acState.Longitude += int32(lonDeltaValue)
+		acState.Longitude += delta
 	}
 
 	if changeMapValue&changeAlt != 0 {
-		altDelta, err := readBytes(r, 2)
+		delta, err := readVarint(r)
 		if err != nil {
-			return record.PositionRecord{}, err
+			return record.PositionRecord{}, fmt.Errorf(
+				"reading altitude delta: %w",
+				err,
+			)
 		}
-		altDeltaValue := int16(binary.LittleEndian.Uint16(altDelta))
 
-		acState.Altitude = uint16(int(acState.Altitude) + int(altDeltaValue))
+		acState.Altitude = uint16(int32(acState.Altitude) + delta)
 	}
 
 	if changeMapValue&changeHdg != 0 {
-		hdgDelta, err := readBytes(r, 1)
+		delta, err := readVarint(r)
 		if err != nil {
-			return record.PositionRecord{}, err
+			return record.PositionRecord{}, fmt.Errorf(
+				"reading heading delta: %w",
+				err,
+			)
 		}
-		hdgDeltaValue := int8(hdgDelta[0])
 
-		acState.Heading = uint16(int(acState.Heading) + int(hdgDeltaValue))
+		acState.Heading = uint16(int32(acState.Heading) + delta)
 	}
 
 	p.aircraftStates[callsign] = acState
