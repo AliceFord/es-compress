@@ -60,19 +60,10 @@ version       1 byte
 #### `[record stream]`
 
 ```
-[timestamp]
 [generic record]
 ...
 [generic record]
-[stop]
-... ([timestamp] -> [stop] repeated)
-[stop]
-```
-
-#### `[timestamp]`
-
-```
-time in s  3 bytes (uint)
+[FF]
 ```
 
 #### `[generic record]`
@@ -85,30 +76,50 @@ record type  1 byte
 #### `[record] (type 0): position record`
 
 ```
-transponder type   1 byte
-aircraft id        2 bytes
-squawk             2 bytes (uint)
-lat                4 bytes (int, actual lat * 100000)
-lon                4 bytes (int, actual lon * 100000)
-alt                2 bytes (uint)
-hdg                2 bytes (uint)
+transponder type  1 byte  (bool)
+aircraft id       2 bytes (uint)
+squawk            2 bytes (uint)
+lat               4 bytes (int, actual lat * 100000)
+lon               4 bytes (int, actual lon * 100000)
+alt               2 bytes (uint)
+hdg               2 bytes (uint)
 ```
 
 #### `[record] (type 1): position record (delta only)`
 
 ```
-change map                   1 byte
-aircraft id                  2 bytes
-(maybe) new transponder type 1 byte
+[change map]                   1 byte 
+aircraft id                  2 bytes (uint)
+(maybe) new transponder type 1 byte  (bool)
 (maybe) new squawk           2 bytes (uint)
-(maybe) lat delta            2 bytes
-(maybe) lon delta            2 bytes
-(maybe) alt delta            2 bytes
-(maybe) hdg delta            1 byte
+(maybe) lat delta            2 bytes (int)
+(maybe) lon delta            2 bytes (int)
+(maybe) alt delta            2 bytes (int)
+(maybe) hdg delta            1 byte  (int)
+```
+
+##### `[change map]`
+
+```
+low bit = bit 0
+bit 0: (maybe) new transponder type
+bit 1: (maybe) new squawk
+bit 2: (maybe) lat delta 
+bit 3: (maybe) lon delta 
+bit 4: (maybe) alt delta
+bit 5: (maybe) hdg delta
+bit 6: reserved
+bit 7: reserved
 ```
 
 #### `[record] (type 2): controller position change`
 
 ```
 position id  1 byte
+```
+
+#### `[record] (type 3): timestamp`
+
+```
+time in s  3 bytes (uint)
 ```

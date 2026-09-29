@@ -11,26 +11,30 @@ import (
 )
 
 var (
-	genericRecordPattern  = regexp.MustCompile(`^\[(\d{2}):(\d{2}):(\d{2}) (?:2>>1|>>>>|<<<2) ([A-Za-z0-9_]+)\]$`)
-	positionRecordPattern = regexp.MustCompile(`^@(N|S):([A-Z0-9_]+):(\d{1,4}):1:(-?\d{1,2}\.\d+):(-?\d{1,2}\.\d+):(\d+):\d+:(\d+):-?\d+$`)
+	genericRecordPattern  = regexp.MustCompile(`^\[(\d{2}):(\d{2}):(\d{2}) (?:2>>1|>>>>|<<<2) ([A-Za-z0-9_]+)]$`)
+	positionRecordPattern = regexp.MustCompile(`^@([NS]):([A-Z0-9_]+):(\d{1,4}):1:(-?\d{1,2}\.\d+):(-?\d{1,2}\.\d+):(\d+):\d+:(\d+):-?\d+$`)
 )
 
 func Parse(s string) ([]record.GenericRecord, error) {
 	text := strings.ReplaceAll(s, "\r\n", "\n")
 
-	outData := []record.GenericRecord{}
+	var outData []record.GenericRecord
 
 	lines := strings.Split(text, "\n")
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
 		if strings.HasPrefix(line, "[") {
 			combined := line + "\n" + lines[i+1]
-			record, err := ParseGenericRecord(combined)
+			genericRecord, err := ParseGenericRecord(combined)
 			if err != nil {
+				if strings.Contains(err.Error(), "unknown record type") {
+					continue
+				}
+
 				return nil, fmt.Errorf("line %d: %w", i, err)
 			}
 
-			outData = append(outData, record)
+			outData = append(outData, genericRecord)
 
 			i++
 		}
@@ -104,8 +108,7 @@ func parseRecordLine(line string) (record.Record, error) {
 		return parsePositionRecord(line)
 	}
 
-	// XXX: should be nil, fmt.Errorf("unknown record type: %q", line)
-	return nil, nil
+	return nil, fmt.Errorf("unknown record type: %q", line)
 }
 
 func parsePositionRecord(line string) (record.PositionRecord, error) {
