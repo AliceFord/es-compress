@@ -11,8 +11,10 @@ import (
 )
 
 var (
-	genericRecordPattern  = regexp.MustCompile(`^\[(\d{2}):(\d{2}):(\d{2}) (?:2>>1|>>>>|<<<2) ([A-Za-z0-9_]+)]$`)
-	positionRecordPattern = regexp.MustCompile(`^@([NS]):([A-Z0-9_]+):(\d{1,4}):1:(-?\d{1,2}\.\d+):(-?\d{1,2}\.\d+):(\d+):\d+:(\d+):-?\d+$`)
+	genericRecordPattern = regexp.MustCompile(`^\[(\d{2}):(\d{2}):(\d{2}) (?:2>>1|>>>>|<<<2) ([A-Za-z0-9_]+)]$`)
+	// XXX: The "-?" before the altitude is memes. Turns out altitude
+	// can be negative. Thanks amsterdam.
+	positionRecordPattern = regexp.MustCompile(`^@([NS]):([A-Z0-9_]+):(\d{1,4}):1:(-?\d{1,2}\.\d+):(-?\d{1,2}\.\d+):-?(\d+):\d+:(\d+):-?\d+$`)
 )
 
 func Parse(s string) ([]record.GenericRecord, error) {
