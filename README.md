@@ -11,14 +11,7 @@ Planned (though probably will never get round to it), is to expand to include mo
 #### Overall file structure
 
 ```
-[zstd data]
-```
-
-#### `[zstd data]`
-
-```
 [header][callsign registry][aircraft registry][record stream]
-all encoded with zstd
 ```
 
 #### `[header]`

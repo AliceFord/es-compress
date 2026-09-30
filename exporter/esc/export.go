@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/AliceFord/es-compress/record"
-	"github.com/klauspost/compress/zstd"
 )
 
 const (
@@ -56,17 +55,7 @@ func Export(records []record.GenericRecord) []byte {
 	callsignIDs, aircraftIDs := writeRegistries(&buf, records)
 	writeRecordStream(&buf, records, callsignIDs, aircraftIDs)
 
-	// Compress with zstd
-	encoder, err := zstd.NewWriter(
-		nil,
-		zstd.WithEncoderLevel(zstd.SpeedBestCompression),
-	)
-	if err != nil {
-		panic(err)
-	}
-	defer encoder.Close()
-
-	return encoder.EncodeAll(buf.Bytes(), nil)
+	return buf.Bytes()
 }
 
 func writeRegistries(
