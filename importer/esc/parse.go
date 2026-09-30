@@ -1,6 +1,7 @@
 package esc
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/AliceFord/es-compress/record"
+	"github.com/klauspost/compress/zstd"
 )
 
 const (
@@ -132,6 +134,27 @@ func readCString(r io.Reader) (string, error) {
 }
 
 func (p *Parser) Parse(r io.Reader) ([]record.GenericRecord, error) {
+	compressed, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+
+	// Decompress with zstd
+	decoder, err := zstd.NewReader(nil)
+	if err != nil {
+		return nil, err
+	}
+	defer decoder.Close()
+
+	uncompressed, err := decoder.DecodeAll(compressed, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.parseUncompressed(bytes.NewReader(uncompressed))
+}
+
+func (p *Parser) parseUncompressed(r io.Reader) ([]record.GenericRecord, error) {
 	if err := p.parseHeader(r); err != nil {
 		return nil, err
 	}
