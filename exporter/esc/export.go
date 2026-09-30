@@ -2,9 +2,9 @@ package esc
 
 import (
 	"bytes"
-	"encoding/binary"
 	"time"
 
+	"github.com/AliceFord/es-compress/binio"
 	"github.com/AliceFord/es-compress/record"
 )
 
@@ -124,7 +124,7 @@ func writeRecordStream(
 			buf.WriteByte(recordTypeTimestampPlus1)
 		} else {
 			buf.WriteByte(recordTypeTimestamp)
-			writeUint24(buf, uint32(t/time.Second))
+			binio.WriteUint24(buf, uint32(t/time.Second))
 		}
 
 		for _, rec := range records[i:j] {
@@ -213,13 +213,13 @@ func writeFullPositionRecord(
 
 	buf.WriteByte(transponder)
 
-	writeUvarint(buf, uint32(aircraftID))
+	binio.WriteUvarint(buf, uint32(aircraftID))
 
-	writeUint16(buf, state.Squawk)
-	writeInt32(buf, state.Latitude)
-	writeInt32(buf, state.Longitude)
-	writeUint16(buf, state.Altitude)
-	writeUint16(buf, state.Heading)
+	binio.WriteUint16(buf, state.Squawk)
+	binio.WriteInt32(buf, state.Latitude)
+	binio.WriteInt32(buf, state.Longitude)
+	binio.WriteUint16(buf, state.Altitude)
+	binio.WriteUint16(buf, state.Heading)
 }
 
 type positionDelta struct {
@@ -307,7 +307,7 @@ func writeDeltaRecord(
 		buf.WriteByte(d.changeMap)
 	}
 
-	writeUvarint(buf, uint32(aircraftID))
+	binio.WriteUvarint(buf, uint32(aircraftID))
 
 	if d.changeMap&changeTransponderType != 0 {
 		if d.isNormalMode {
@@ -318,23 +318,23 @@ func writeDeltaRecord(
 	}
 
 	if d.changeMap&changeSquawk != 0 {
-		writeUint16(buf, state.Squawk)
+		binio.WriteUint16(buf, state.Squawk)
 	}
 
 	if d.changeMap&changeLat != 0 {
-		writeVarint(buf, d.lat)
+		binio.WriteVarint(buf, d.lat)
 	}
 
 	if d.changeMap&changeLon != 0 {
-		writeVarint(buf, d.lon)
+		binio.WriteVarint(buf, d.lon)
 	}
 
 	if d.changeMap&changeAlt != 0 {
-		writeVarint(buf, d.alt)
+		binio.WriteVarint(buf, d.alt)
 	}
 
 	if d.changeMap&changeHdg != 0 {
-		writeVarint(buf, d.hdg)
+		binio.WriteVarint(buf, d.hdg)
 	}
 }
 
@@ -384,33 +384,4 @@ func stateFrom(pos record.PositionRecord) aircraftState {
 		Altitude:     uint16(pos.Altitude),
 		Heading:      uint16(pos.Heading),
 	}
-}
-
-func writeInt32(buf *bytes.Buffer, v int32) {
-	binary.Write(buf, binary.LittleEndian, v)
-}
-
-func writeUint16(buf *bytes.Buffer, v uint16) {
-	var b [2]byte
-
-	binary.LittleEndian.PutUint16(b[:], v)
-	buf.Write(b[:])
-}
-
-func writeUint24(buf *bytes.Buffer, v uint32) {
-	buf.WriteByte(byte(v))
-	buf.WriteByte(byte(v >> 8))
-	buf.WriteByte(byte(v >> 16))
-}
-
-func writeVarint(buf *bytes.Buffer, v int32) {
-	var b [binary.MaxVarintLen32]byte
-	n := binary.PutVarint(b[:], int64(v))
-	buf.Write(b[:n])
-}
-
-func writeUvarint(buf *bytes.Buffer, v uint32) {
-	var b [binary.MaxVarintLen32]byte
-	n := binary.PutUvarint(b[:], uint64(v))
-	buf.Write(b[:n])
 }

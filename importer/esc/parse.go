@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"time"
 
+	"github.com/AliceFord/es-compress/binio"
 	"github.com/AliceFord/es-compress/record"
 )
 
@@ -55,82 +55,6 @@ func NewParser(logger *slog.Logger) *Parser {
 	return &Parser{Logger: logger}
 }
 
-func readBytes(r io.Reader, n int) ([]byte, error) {
-	buf := make([]byte, n)
-	_, err := io.ReadFull(r, buf)
-
-	return buf, err
-}
-
-func readVarint(r io.Reader) (int32, error) {
-	var br io.ByteReader
-
-	if b, ok := r.(io.ByteReader); ok {
-		br = b
-	} else {
-		br = &byteReader{r: r}
-	}
-
-	v, err := binary.ReadVarint(br)
-	if err != nil {
-		return 0, err
-	}
-
-	if v < math.MinInt32 || v > math.MaxInt32 {
-		return 0, fmt.Errorf("varint out of int32 range: %d", v)
-	}
-
-	return int32(v), nil
-}
-
-func readUvarint(r io.Reader) (uint16, error) {
-	var br io.ByteReader
-
-	if b, ok := r.(io.ByteReader); ok {
-		br = b
-	} else {
-		br = &byteReader{r: r}
-	}
-
-	v, err := binary.ReadUvarint(br)
-	if err != nil {
-		return 0, err
-	}
-
-	if v > math.MaxUint16 {
-		return 0, fmt.Errorf("varint out of uint16 range: %d", v)
-	}
-
-	return uint16(v), nil
-}
-
-type byteReader struct {
-	r io.Reader
-}
-
-func (r *byteReader) ReadByte() (byte, error) {
-	var b [1]byte
-	_, err := io.ReadFull(r.r, b[:])
-	return b[0], err
-}
-
-func readCString(r io.Reader) (string, error) {
-	var buf []byte
-
-	for {
-		b, err := readBytes(r, 1)
-		if err != nil {
-			return "", err
-		}
-
-		if b[0] == 0 {
-			return string(buf), nil
-		}
-
-		buf = append(buf, b[0])
-	}
-}
-
 func (p *Parser) Parse(r io.Reader) ([]record.GenericRecord, error) {
 	if err := p.parseHeader(r); err != nil {
 		return nil, err
@@ -148,7 +72,7 @@ func (p *Parser) Parse(r io.Reader) ([]record.GenericRecord, error) {
 }
 
 func (p *Parser) parseHeader(r io.Reader) error {
-	magic, err := readBytes(r, 4)
+	magic, err := binio.ReadBytes(r, 4)
 	if err != nil {
 		return err
 	}
@@ -157,7 +81,7 @@ func (p *Parser) parseHeader(r io.Reader) error {
 		return fmt.Errorf("incorrect magic number: %s", magic)
 	}
 
-	version, err := readBytes(r, 1)
+	version, err := binio.ReadBytes(r, 1)
 	if err != nil {
 		return err
 	}
@@ -172,7 +96,7 @@ func (p *Parser) parseCallsignRegistry(r io.Reader) error {
 	p.callsignMap = make(map[uint8]string)
 
 	for {
-		callsign, err := readCString(r)
+		callsign, err := binio.ReadCString(r)
 		if err != nil {
 			return err
 		}
@@ -192,7 +116,7 @@ func (p *Parser) parseAircraftRegistry(r io.Reader) error {
 	p.aircraftMap = make(map[uint16]string)
 
 	for {
-		callsign, err := readCString(r)
+		callsign, err := binio.ReadCString(r)
 		if err != nil {
 			return err
 		}
@@ -232,7 +156,7 @@ func (p *Parser) parseRecordStream(r io.Reader) ([]record.GenericRecord, error) 
 }
 
 func (p *Parser) parseTimestampRecord(r io.Reader) error {
-	timestamp, err := readBytes(r, 3)
+	timestamp, err := binio.ReadBytes(r, 3)
 	if err != nil {
 		return err
 	}
@@ -252,7 +176,7 @@ func (p *Parser) parseTimestampPlus1Record() {
 }
 
 func (p *Parser) parseGenericRecord(r io.Reader) (record.GenericRecord, error) {
-	recordType, err := readBytes(r, 1)
+	recordType, err := binio.ReadBytes(r, 1)
 	if err != nil {
 		return record.GenericRecord{}, err
 	}
@@ -273,7 +197,7 @@ func (p *Parser) parseGenericRecord(r io.Reader) (record.GenericRecord, error) {
 		return genericRecord, nil
 
 	case recordTypeDelta:
-		changeMap, err := readBytes(r, 1)
+		changeMap, err := binio.ReadBytes(r, 1)
 		if err != nil {
 			return record.GenericRecord{}, err
 		}
@@ -374,7 +298,7 @@ func (p *Parser) parseGenericRecord(r io.Reader) (record.GenericRecord, error) {
 }
 
 func (p *Parser) parsePositionRecord(r io.Reader) (record.PositionRecord, error) {
-	transponderType, err := readBytes(r, 1)
+	transponderType, err := binio.ReadBytes(r, 1)
 	if err != nil {
 		return record.PositionRecord{}, err
 	}
@@ -382,7 +306,7 @@ func (p *Parser) parsePositionRecord(r io.Reader) (record.PositionRecord, error)
 	isNormalMode := transponderType[0]&1 == 1
 
 	// Aircraft IDs are encoded as uvarints.
-	aircraftID, err := readUvarint(r)
+	aircraftID, err := binio.ReadUvarint(r)
 	if err != nil {
 		return record.PositionRecord{}, fmt.Errorf(
 			"reading aircraft ID: %w",
@@ -398,33 +322,33 @@ func (p *Parser) parsePositionRecord(r io.Reader) (record.PositionRecord, error)
 		)
 	}
 
-	squawk, err := readBytes(r, 2)
+	squawk, err := binio.ReadBytes(r, 2)
 	if err != nil {
 		return record.PositionRecord{}, err
 	}
 	squawkValue := binary.LittleEndian.Uint16(squawk)
 
-	lat, err := readBytes(r, 4)
+	lat, err := binio.ReadBytes(r, 4)
 	if err != nil {
 		return record.PositionRecord{}, err
 	}
 	latRaw := int32(binary.LittleEndian.Uint32(lat))
 	latValue := float64(latRaw) / 100000.0
 
-	lon, err := readBytes(r, 4)
+	lon, err := binio.ReadBytes(r, 4)
 	if err != nil {
 		return record.PositionRecord{}, err
 	}
 	lonRaw := int32(binary.LittleEndian.Uint32(lon))
 	lonValue := float64(lonRaw) / 100000.0
 
-	alt, err := readBytes(r, 2)
+	alt, err := binio.ReadBytes(r, 2)
 	if err != nil {
 		return record.PositionRecord{}, err
 	}
 	altValue := binary.LittleEndian.Uint16(alt)
 
-	hdg, err := readBytes(r, 2)
+	hdg, err := binio.ReadBytes(r, 2)
 	if err != nil {
 		return record.PositionRecord{}, err
 	}
@@ -454,7 +378,7 @@ func (p *Parser) parsePositionRecordDelta(
 	r io.Reader,
 	changeMap byte,
 ) (record.PositionRecord, error) {
-	aircraftID, err := readUvarint(r)
+	aircraftID, err := binio.ReadUvarint(r)
 	if err != nil {
 		return record.PositionRecord{}, fmt.Errorf(
 			"reading aircraft ID: %w",
@@ -479,7 +403,7 @@ func (p *Parser) parsePositionRecordDelta(
 	}
 
 	if changeMap&changeTransponderType != 0 {
-		transponderType, err := readBytes(r, 1)
+		transponderType, err := binio.ReadBytes(r, 1)
 		if err != nil {
 			return record.PositionRecord{}, err
 		}
@@ -488,7 +412,7 @@ func (p *Parser) parsePositionRecordDelta(
 	}
 
 	if changeMap&changeSquawk != 0 {
-		squawk, err := readBytes(r, 2)
+		squawk, err := binio.ReadBytes(r, 2)
 		if err != nil {
 			return record.PositionRecord{}, err
 		}
@@ -497,7 +421,7 @@ func (p *Parser) parsePositionRecordDelta(
 	}
 
 	if changeMap&changeLat != 0 {
-		delta, err := readVarint(r)
+		delta, err := binio.ReadVarint(r)
 		if err != nil {
 			return record.PositionRecord{}, fmt.Errorf(
 				"reading latitude delta: %w",
@@ -509,7 +433,7 @@ func (p *Parser) parsePositionRecordDelta(
 	}
 
 	if changeMap&changeLon != 0 {
-		delta, err := readVarint(r)
+		delta, err := binio.ReadVarint(r)
 		if err != nil {
 			return record.PositionRecord{}, fmt.Errorf(
 				"reading longitude delta: %w",
@@ -521,7 +445,7 @@ func (p *Parser) parsePositionRecordDelta(
 	}
 
 	if changeMap&changeAlt != 0 {
-		delta, err := readVarint(r)
+		delta, err := binio.ReadVarint(r)
 		if err != nil {
 			return record.PositionRecord{}, fmt.Errorf(
 				"reading altitude delta: %w",
@@ -535,7 +459,7 @@ func (p *Parser) parsePositionRecordDelta(
 	}
 
 	if changeMap&changeHdg != 0 {
-		delta, err := readVarint(r)
+		delta, err := binio.ReadVarint(r)
 		if err != nil {
 			return record.PositionRecord{}, fmt.Errorf(
 				"reading heading delta: %w",
@@ -562,7 +486,7 @@ func (p *Parser) parsePositionRecordDelta(
 }
 
 func (p *Parser) parseControllerPositionChange(r io.Reader) error {
-	controllerID, err := readBytes(r, 1)
+	controllerID, err := binio.ReadBytes(r, 1)
 	if err != nil {
 		return err
 	}
