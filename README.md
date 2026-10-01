@@ -1,10 +1,38 @@
 # Euroscope replay file encoder + decoder
 
-Lossy storage for ES replay files. 
+Lossy(*) storage for ES replay files. 
 
-v0 only includes aircraft position updates, i.e. `@N` / `@S`. This is because these are all that are needed for making replays. 
+Supported record types:
+```
+@N/@S (position)
 
-Planned (though probably will never get round to it), is to expand to include more messages, including to make a lossless format.
+```
+Planned record types:
+```
+#TM (text message)
+% (ATC position message)
+$FP (flightplan)
+#PC (coordination)
+#DP (delete pilot)
+#AP (add pilot)
+#ST (fast packet)
+#AA (add ATC)
+#DA (delete ATC)
+$CR (request details)
+$AX (ask for METAR)
+$AR (METAR response)
+$ER (errors)
+$HO / $HA (handoff offer + accept)
+@Y (squawk ident)
+```
+Not planned record types (as these are essentially useless):
+```
+$CQ, specifically ACC command (aircraft config details)
+$SB (ac model matching from SquawkBox)
+$ZC / $ZR (client authentication)
+```
+
+*: Lossy because these "useless" packets are discarded. All supported record types are stored lossless.
 
 ## Current file format (vibes-based diagram)
 
