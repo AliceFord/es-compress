@@ -27,7 +27,7 @@ $HO / $HA (handoff offer + accept)
 ```
 Not planned record types (as these are essentially useless):
 ```
-$CQ, specifically ACC command (aircraft config details)
+$CQ (client query, which are just protocol requests and hold no useful data)
 $SB (ac model matching from SquawkBox)
 $ZC / $ZR (client authentication)
 #TM FP GET (flightplan recieved ack)

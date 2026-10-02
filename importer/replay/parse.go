@@ -30,7 +30,7 @@ func Parse(s string) ([]record.GenericRecord, error) {
 			combined := line + "\n" + lines[i+1]
 			genericRecord, err := ParseGenericRecord(combined)
 			if err != nil {
-				if strings.Contains(err.Error(), "unknown record type") || strings.Contains(err.Error(), "ignoring FP message") {
+				if strings.Contains(err.Error(), "ignoring") {
 					continue
 				}
 
@@ -113,6 +113,9 @@ func parseRecordLine(line string, arrowType string) (record.Record, error) {
 	}
 	if strings.HasPrefix(line, "#TM") {
 		return parseMessageRecord(line)
+	}
+	if strings.HasPrefix(line, "$CQ") || strings.HasPrefix(line, "$SB") || strings.HasPrefix(line, "$ZC") || strings.HasPrefix(line, "$ZR") {
+		return nil, fmt.Errorf("ignoring intentionally unplanned messages: %q", line)
 	}
 
 	return parseUnknownRecord(line, arrowType)
