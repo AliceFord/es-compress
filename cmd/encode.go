@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	exportesc "github.com/AliceFord/es-compress/exporter/esc"
@@ -27,6 +28,8 @@ var encodeCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+
+		fmt.Printf("%+v\n", parsed)
 
 		outPath, err := cmd.Flags().GetString("output")
 		if err != nil {

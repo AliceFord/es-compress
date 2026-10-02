@@ -26,8 +26,8 @@ func TestParseGenericRecord(t *testing.T) {
 		t.Errorf("Callsign = %q, want EGPF_APP", got.Callsign)
 	}
 
-	if !got.Record.Direction() {
-		t.Errorf("Direction = false, want true")
+	if got.ArrowType() != ">>>>" {
+		t.Errorf("Direction = %q, want >>>>", got.ArrowType())
 	}
 
 	p, ok := got.Record.(record.PositionRecord)

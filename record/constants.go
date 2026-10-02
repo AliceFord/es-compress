@@ -1,6 +1,8 @@
 package record
 
-import "time"
+import (
+	"time"
+)
 
 // GenericRecord is one timestamp line plus one message line from an ES replay.
 type GenericRecord struct {
@@ -11,10 +13,7 @@ type GenericRecord struct {
 
 // Record is any message that can appear as the second line of a GenericRecord.
 // Concrete types implement this interface.
-type Record interface {
-	Direction() bool // true if direction is >>, false if <<
-	isPosition()
-}
+type Record any
 
 // PositionRecord is the @N / @S position update record.
 type PositionRecord struct {
@@ -27,8 +26,30 @@ type PositionRecord struct {
 	Heading      uint16
 }
 
-func (PositionRecord) isPosition() {}
+type MessageRecord struct {
+	Sender   string
+	Receiver string
+	Message  string
+}
 
-func (PositionRecord) Direction() bool {
-	return true
+type UnknownRecord struct {
+	ArrowType string
+	Raw       string
+}
+
+func (g GenericRecord) ArrowType() string {
+	switch r := g.Record.(type) {
+	case PositionRecord:
+		return ">>>>"
+	case MessageRecord:
+		if r.Sender == g.Callsign {
+			return ">>>>"
+		}
+
+		return "<<<2"
+	case UnknownRecord:
+		return r.ArrowType
+	default:
+		panic("unknown record type: " + r.(any).(string))
+	}
 }

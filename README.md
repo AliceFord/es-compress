@@ -5,11 +5,11 @@ Lossy(*) storage for ES replay files.
 Supported record types:
 ```
 @N/@S (position)
+#TM (text message)
 
 ```
 Planned record types:
 ```
-#TM (text message)
 % (ATC position message)
 $FP (flightplan)
 #PC (coordination)
@@ -30,6 +30,7 @@ Not planned record types (as these are essentially useless):
 $CQ, specifically ACC command (aircraft config details)
 $SB (ac model matching from SquawkBox)
 $ZC / $ZR (client authentication)
+#TM FP GET (flightplan recieved ack)
 ```
 
 *: Lossy because these "useless" packets are discarded. All supported record types are stored lossless.
@@ -165,3 +166,25 @@ time in s  3 bytes (uint)
 #### `[record] (type 8): type 1, with change map lat lon alt hdg`
 
 #### `[record] (type 8): type 1, with change map lat lon hdg`
+
+#### `[record] (type 9): message`
+
+```
+
+```
+
+#### `[record] (type 10): unknown`
+
+```
+[arrow type]
+unknown packet details  ? bytes
+[stop]
+```
+
+##### `[arrow type]`
+```
+1 byte, either:
+00    === ">>>>"
+01    === "<<<2"
+02    === "2>>1"
+```
