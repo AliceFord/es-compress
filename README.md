@@ -39,7 +39,7 @@ $ZC / $ZR (client authentication)
 #### Overall file structure
 
 ```
-[header][callsign registry][aircraft registry][record stream]
+[header][text registry][record stream]
 ```
 
 #### `[header]`
@@ -49,40 +49,25 @@ magic value   4 bytes ("skog")
 version       1 byte
 ```
 
-#### `[callsign registry]`
+#### `[text registry]`
 
 ```
-[callsign]
+[text]
 ...
-[callsign]
+[text]
 [stop]
 ```
 
-#### `[callsign]`
+#### `[text]`
 
 ```
-[A-Z0-9_]+ followed by 0 byte
+string followed by 0 byte
 ```
 
 #### `[stop]`
 
 ```
 0 byte
-```
-
-#### `[aircraft registry]`
-
-```
-[callsign]
-...
-[callsign]
-[stop]
-```
-
-#### `[callsign]`
-
-```
-[A-Z0-9]+ followed by 0 byte
 ```
 
 #### `[record stream]`

@@ -2,7 +2,6 @@ package esc
 
 import (
 	"bytes"
-	"fmt"
 	"time"
 
 	"github.com/AliceFord/es-compress/binio"
@@ -56,48 +55,46 @@ func Export(records []record.GenericRecord) []byte {
 	buf.WriteString("skog")
 	buf.WriteByte(version)
 
-	callsignIDs, aircraftIDs := writeRegistries(&buf, records)
-	writeRecordStream(&buf, records, callsignIDs, aircraftIDs)
+	textIDs := writeTextRegistry(&buf, records)
+	writeRecordStream(&buf, records, textIDs)
 
 	return buf.Bytes()
 }
 
-func writeRegistries(
+func writeTextRegistry(
 	buf *bytes.Buffer,
 	records []record.GenericRecord,
-) (map[string]uint8, map[string]uint16) {
-	callsigns := make([]string, 0)
-	callsignIDs := make(map[string]uint8)
+) map[string]uint16 {
+	texts := make([]string, 0)
+	textIDs := make(map[string]uint16)
 
-	aircraft := make([]string, 0)
-	aircraftIDs := make(map[string]uint16)
+	addText := func(text string) {
+		if _, ok := textIDs[text]; ok {
+			return
+		}
+
+		textIDs[text] = uint16(len(texts))
+		texts = append(texts, text)
+	}
 
 	for _, rec := range records {
-		if _, ok := callsignIDs[rec.Callsign]; !ok {
-			callsignIDs[rec.Callsign] = uint8(len(callsigns))
-			callsigns = append(callsigns, rec.Callsign)
-		}
+		// Controller/source callsign.
+		addText(rec.Callsign)
 
-		pos, ok := rec.Record.(record.PositionRecord)
-		if !ok {
-			continue
-		}
-
-		if _, ok := aircraftIDs[pos.Callsign]; !ok {
-			aircraftIDs[pos.Callsign] = uint16(len(aircraft))
-			aircraft = append(aircraft, pos.Callsign)
+		// Aircraft callsign.
+		if pos, ok := rec.Record.(record.PositionRecord); ok {
+			addText(pos.Callsign)
 		}
 	}
 
-	writeCallsignList(buf, callsigns)
-	writeCallsignList(buf, aircraft)
+	writeTextList(buf, texts)
 
-	return callsignIDs, aircraftIDs
+	return textIDs
 }
 
-func writeCallsignList(buf *bytes.Buffer, callsigns []string) {
-	for _, cs := range callsigns {
-		buf.WriteString(cs)
+func writeTextList(buf *bytes.Buffer, texts []string) {
+	for _, text := range texts {
+		buf.WriteString(text)
 		buf.WriteByte(stop)
 	}
 
@@ -107,8 +104,7 @@ func writeCallsignList(buf *bytes.Buffer, callsigns []string) {
 func writeRecordStream(
 	buf *bytes.Buffer,
 	records []record.GenericRecord,
-	callsignIDs map[string]uint8,
-	aircraftIDs map[string]uint16,
+	textIDs map[string]uint16,
 ) {
 	aircraftStates := make(map[uint16]aircraftState)
 	currentState := new(universalState)
@@ -136,12 +132,12 @@ func writeRecordStream(
 				writeControllerChangeRecord(
 					buf,
 					rec.Callsign,
-					callsignIDs,
+					textIDs,
 					currentState,
 				)
 			}
 
-			writeGenericRecord(buf, rec, aircraftIDs, aircraftStates)
+			writeGenericRecord(buf, rec, textIDs, aircraftStates)
 		}
 
 		i = j
@@ -154,31 +150,31 @@ func writeRecordStream(
 func writeControllerChangeRecord(
 	buf *bytes.Buffer,
 	callsign string,
-	callsignIDs map[string]uint8,
+	textIDs map[string]uint16,
 	currentState *universalState,
 ) {
-	callsignID := callsignIDs[callsign]
+	textID := textIDs[callsign]
 
 	currentState.currentController = callsign
 
 	buf.WriteByte(recordTypeController)
-	buf.WriteByte(callsignID)
+	binio.WriteUint16(buf, textID)
 }
 
 func writeGenericRecord(
 	buf *bytes.Buffer,
 	rec record.GenericRecord,
-	aircraftIDs map[string]uint16,
+	textIDs map[string]uint16,
 	last map[uint16]aircraftState,
 ) {
 	switch r := rec.Record.(type) {
 	case record.PositionRecord:
-		writePositionRecord(buf, r, aircraftIDs, last)
+		writePositionRecord(buf, r, textIDs, last)
 	// case record.MessageRecord:
-	// 	writeMessageRecord(buf, r, aircraftIDs)
+	// 	writeMessageRecord(buf, r, textIDs)
 	case record.UnknownRecord:
 		writeUnknownRecord(buf, r)
 	default:
-		panic(fmt.Sprintf("unknown record type: %+v", r))
+		// panic(fmt.Sprintf("unknown record type: %+v", r))
 	}
 }

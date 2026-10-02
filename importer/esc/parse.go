@@ -24,6 +24,9 @@ const (
 	recordTypeDeltaLatLonAltHdg byte = 8
 	recordTypeDeltaLatLonHdg    byte = 9
 
+	recordTypeMessage byte = 10
+	recordTypeUnknown byte = 11
+
 	changeTransponderType byte = 1 << 0
 	changeSquawk          byte = 1 << 1
 	changeLat             byte = 1 << 2
@@ -47,8 +50,8 @@ type Parser struct {
 	currentTimestamp time.Duration
 	currentCallsign  string
 	aircraftStates   map[string]aircraftState
-	callsignMap      map[uint8]string
-	aircraftMap      map[uint16]string
+
+	textMap map[uint16]string
 }
 
 func NewParser(logger *slog.Logger) *Parser {
@@ -60,11 +63,7 @@ func (p *Parser) Parse(r io.Reader) ([]record.GenericRecord, error) {
 		return nil, err
 	}
 
-	if err := p.parseCallsignRegistry(r); err != nil {
-		return nil, err
-	}
-
-	if err := p.parseAircraftRegistry(r); err != nil {
+	if err := p.parseTextRegistry(r); err != nil {
 		return nil, err
 	}
 
@@ -91,47 +90,30 @@ func (p *Parser) parseHeader(r io.Reader) error {
 	return nil
 }
 
-func (p *Parser) parseCallsignRegistry(r io.Reader) error {
-	var callsignID uint8
-	p.callsignMap = make(map[uint8]string)
+func (p *Parser) parseTextRegistry(r io.Reader) error {
+	var textID uint16
+
+	p.textMap = make(map[uint16]string)
 
 	for {
-		callsign, err := binio.ReadCString(r)
+		text, err := binio.ReadCString(r)
 		if err != nil {
 			return err
 		}
 
 		// Empty string == [stop] byte.
-		if callsign == "" {
+		if text == "" {
 			return nil
 		}
 
-		p.callsignMap[callsignID] = callsign
-		callsignID++
+		p.textMap[textID] = text
+		textID++
 	}
 }
 
-func (p *Parser) parseAircraftRegistry(r io.Reader) error {
-	var aircraftID uint16
-	p.aircraftMap = make(map[uint16]string)
-
-	for {
-		callsign, err := binio.ReadCString(r)
-		if err != nil {
-			return err
-		}
-
-		// Empty string == [stop] byte.
-		if callsign == "" {
-			return nil
-		}
-
-		p.aircraftMap[aircraftID] = callsign
-		aircraftID++
-	}
-}
-
-func (p *Parser) parseRecordStream(r io.Reader) ([]record.GenericRecord, error) {
+func (p *Parser) parseRecordStream(
+	r io.Reader,
+) ([]record.GenericRecord, error) {
 	var records []record.GenericRecord
 
 	p.aircraftStates = make(map[string]aircraftState)
@@ -175,7 +157,9 @@ func (p *Parser) parseTimestampPlus1Record() {
 	p.currentTimestamp += time.Second
 }
 
-func (p *Parser) parseGenericRecord(r io.Reader) (record.GenericRecord, error) {
+func (p *Parser) parseGenericRecord(
+	r io.Reader,
+) (record.GenericRecord, error) {
 	recordType, err := binio.ReadBytes(r, 1)
 	if err != nil {
 		return record.GenericRecord{}, err
@@ -202,7 +186,10 @@ func (p *Parser) parseGenericRecord(r io.Reader) (record.GenericRecord, error) {
 			return record.GenericRecord{}, err
 		}
 
-		posRecord, err := p.parsePositionRecordDelta(r, changeMap[0])
+		posRecord, err := p.parsePositionRecordDelta(
+			r,
+			changeMap[0],
+		)
 		if err != nil {
 			return record.GenericRecord{}, err
 		}
@@ -297,7 +284,9 @@ func (p *Parser) parseGenericRecord(r io.Reader) (record.GenericRecord, error) {
 	}
 }
 
-func (p *Parser) parsePositionRecord(r io.Reader) (record.PositionRecord, error) {
+func (p *Parser) parsePositionRecord(
+	r io.Reader,
+) (record.PositionRecord, error) {
 	transponderType, err := binio.ReadBytes(r, 1)
 	if err != nil {
 		return record.PositionRecord{}, err
@@ -305,20 +294,20 @@ func (p *Parser) parsePositionRecord(r io.Reader) (record.PositionRecord, error)
 
 	isNormalMode := transponderType[0]&1 == 1
 
-	// Aircraft IDs are encoded as uvarints.
-	aircraftID, err := binio.ReadUvarint(r)
+	// Text IDs are encoded as uvarints in position records.
+	textID, err := binio.ReadUvarint(r)
 	if err != nil {
 		return record.PositionRecord{}, fmt.Errorf(
-			"reading aircraft ID: %w",
+			"reading aircraft text ID: %w",
 			err,
 		)
 	}
 
-	callsign, ok := p.aircraftMap[aircraftID]
+	callsign, ok := p.textMap[uint16(textID)]
 	if !ok {
 		return record.PositionRecord{}, fmt.Errorf(
-			"unknown aircraft: %d",
-			aircraftID,
+			"unknown aircraft text ID: %d",
+			textID,
 		)
 	}
 
@@ -378,27 +367,27 @@ func (p *Parser) parsePositionRecordDelta(
 	r io.Reader,
 	changeMap byte,
 ) (record.PositionRecord, error) {
-	aircraftID, err := binio.ReadUvarint(r)
+	textID, err := binio.ReadUvarint(r)
 	if err != nil {
 		return record.PositionRecord{}, fmt.Errorf(
-			"reading aircraft ID: %w",
+			"reading aircraft text ID: %w",
 			err,
 		)
 	}
 
-	callsign, ok := p.aircraftMap[aircraftID]
+	callsign, ok := p.textMap[uint16(textID)]
 	if !ok {
 		return record.PositionRecord{}, fmt.Errorf(
-			"unknown aircraft: %d",
-			aircraftID,
+			"unknown aircraft text ID: %d",
+			textID,
 		)
 	}
 
 	acState, ok := p.aircraftStates[callsign]
 	if !ok {
 		return record.PositionRecord{}, fmt.Errorf(
-			"no previous state for aircraft: %d",
-			aircraftID,
+			"no previous state for aircraft text ID: %d",
+			textID,
 		)
 	}
 
@@ -485,12 +474,25 @@ func (p *Parser) parsePositionRecordDelta(
 	}, nil
 }
 
-func (p *Parser) parseControllerPositionChange(r io.Reader) error {
-	controllerID, err := binio.ReadBytes(r, 1)
+func (p *Parser) parseControllerPositionChange(
+	r io.Reader,
+) error {
+	controllerIDBytes, err := binio.ReadBytes(r, 2)
 	if err != nil {
 		return err
 	}
 
-	p.currentCallsign = p.callsignMap[controllerID[0]]
+	textID := binary.LittleEndian.Uint16(controllerIDBytes)
+
+	callsign, ok := p.textMap[textID]
+	if !ok {
+		return fmt.Errorf(
+			"unknown controller text ID: %d",
+			textID,
+		)
+	}
+
+	p.currentCallsign = callsign
+
 	return nil
 }
