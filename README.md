@@ -6,7 +6,6 @@ Supported record types:
 ```
 @N/@S (position)
 #TM (text message)
-
 ```
 Planned record types:
 ```
@@ -25,7 +24,7 @@ $ER (errors)
 $HO / $HA (handoff offer + accept)
 @Y (squawk ident)
 ```
-Not planned record types (as these are essentially useless):
+Ignored record types (as these are essentially useless):
 ```
 $CQ (client query, which are just protocol requests and hold no useful data)
 $SB (ac model matching from SquawkBox)
@@ -165,15 +164,15 @@ time in s  3 bytes (uint)
 
 #### `[record] (type 8): type 1, with change map lat lon alt hdg`
 
-#### `[record] (type 8): type 1, with change map lat lon hdg`
+#### `[record] (type 9): type 1, with change map lat lon hdg`
 
-#### `[record] (type 9): message`
-
-```
+#### `[record] (type 10): message`
 
 ```
 
-#### `[record] (type 10): unknown`
+```
+
+#### `[record] (type 11): unknown`
 
 ```
 [arrow type]
