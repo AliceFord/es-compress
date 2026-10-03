@@ -17,6 +17,7 @@ var (
 		"$ZC",
 		"$ZR",
 		"#ST",
+		"#AX",
 	}
 
 	genericRecordPattern = regexp.MustCompile(`^\[(\d{2}):(\d{2}):(\d{2}) (2>>1|>>>>|<<<2) ([A-Za-z0-9_]+)]$`)
@@ -25,6 +26,7 @@ var (
 	positionRecordPattern = regexp.MustCompile(`^@([NS]):([A-Z0-9_]+):(\d{1,4}):1:(-?\d{1,2}\.\d+):(-?\d{1,2}\.\d+):-?(\d+):\d+:(\d+):-?\d+$`)
 	messageRecordPattern  = regexp.MustCompile(`^#TM(.+?):(.+?):(.*)$`)
 	addPilotRecordPattern = regexp.MustCompile(`^#AP([A-Z0-9_]+):SERVER:(\d+)::1:\d+:(\d+):(.*)$`)
+	addAtcRecordPattern   = regexp.MustCompile(`^#ATC([A-Z0-9_]+):SERVER:(\d+)::1:\d+:(\d+):(.*)$`)
 )
 
 func Parse(s string) ([]record.GenericRecord, error) {
@@ -83,35 +85,30 @@ func ParseGenericRecord(s string) (record.GenericRecord, error) {
 }
 
 func parseTimeLine(line string) (time.Duration, string, string, error) {
-	matches := genericRecordPattern.FindAllStringSubmatch(line, -1)
-	if len(matches) != 1 {
-		return 0, "", "", fmt.Errorf("expected 1 match, got %d", len(matches))
+	matches := genericRecordPattern.FindStringSubmatch(line)
+	if len(matches) != 6 {
+		return 0, "", "", fmt.Errorf("expected 6 matches, got %d", len(matches))
 	}
 
-	match := matches[0]
-	if len(match) != 6 {
-		return 0, "", "", fmt.Errorf("expected 6 matches, got %d", len(match))
-	}
-
-	hour, err := strconv.Atoi(match[1])
+	hour, err := strconv.Atoi(matches[1])
 	if err != nil {
 		return 0, "", "", fmt.Errorf("hour: %w", err)
 	}
 
-	minute, err := strconv.Atoi(match[2])
+	minute, err := strconv.Atoi(matches[2])
 	if err != nil {
 		return 0, "", "", fmt.Errorf("minute: %w", err)
 	}
 
-	second, err := strconv.Atoi(match[3])
+	second, err := strconv.Atoi(matches[3])
 	if err != nil {
 		return 0, "", "", fmt.Errorf("second: %w", err)
 	}
 
 	t := time.Duration(hour)*time.Hour + time.Duration(minute)*time.Minute + time.Duration(second)*time.Second
 
-	arrowType := match[4]
-	callsign := match[5]
+	arrowType := matches[4]
+	callsign := matches[5]
 
 	return t, arrowType, callsign, nil
 }
@@ -136,40 +133,35 @@ func parseRecordLine(line string, arrowType string) (record.Record, error) {
 }
 
 func parsePositionRecord(line string) (record.PositionRecord, error) {
-	matches := positionRecordPattern.FindAllStringSubmatch(line, -1)
-	if len(matches) != 1 {
-		return record.PositionRecord{}, fmt.Errorf("expected 1 match, got %d for line %s", len(matches), line)
+	matches := positionRecordPattern.FindStringSubmatch(line)
+	if len(matches) != 8 {
+		return record.PositionRecord{}, fmt.Errorf("expected 8 matches, got %d", len(matches))
 	}
 
-	match := matches[0]
-	if len(match) != 8 {
-		return record.PositionRecord{}, fmt.Errorf("expected 8 matches, got %d", len(match))
-	}
+	isNormalMode := matches[1] == "N"
+	callsign := matches[2]
 
-	isNormalMode := match[1] == "N"
-	callsign := match[2]
-
-	squawk, err := strconv.ParseUint(match[3], 10, 16)
+	squawk, err := strconv.ParseUint(matches[3], 10, 16)
 	if err != nil {
 		return record.PositionRecord{}, fmt.Errorf("squawk: %w", err)
 	}
 
-	latitude, err := strconv.ParseFloat(match[4], 64)
+	latitude, err := strconv.ParseFloat(matches[4], 64)
 	if err != nil {
 		return record.PositionRecord{}, fmt.Errorf("latitude: %w", err)
 	}
 
-	longitude, err := strconv.ParseFloat(match[5], 64)
+	longitude, err := strconv.ParseFloat(matches[5], 64)
 	if err != nil {
 		return record.PositionRecord{}, fmt.Errorf("longitude: %w", err)
 	}
 
-	altitude, err := strconv.ParseUint(match[6], 10, 16)
+	altitude, err := strconv.ParseUint(matches[6], 10, 16)
 	if err != nil {
 		return record.PositionRecord{}, fmt.Errorf("altitude: %w", err)
 	}
 
-	headingEncoded, err := strconv.ParseUint(match[7], 10, 32)
+	headingEncoded, err := strconv.ParseUint(matches[7], 10, 32)
 	if err != nil {
 		return record.PositionRecord{}, fmt.Errorf("heading: %w", err)
 	}
@@ -188,19 +180,14 @@ func parsePositionRecord(line string) (record.PositionRecord, error) {
 }
 
 func parseMessageRecord(line string) (record.MessageRecord, error) {
-	matches := messageRecordPattern.FindAllStringSubmatch(line, -1)
-	if len(matches) != 1 {
-		return record.MessageRecord{}, fmt.Errorf("expected 1 match, got %d for line %s", len(matches), line)
+	matches := messageRecordPattern.FindStringSubmatch(line)
+	if len(matches) != 4 {
+		return record.MessageRecord{}, fmt.Errorf("expected 4 matches, got %d", len(matches))
 	}
 
-	match := matches[0]
-	if len(match) != 4 {
-		return record.MessageRecord{}, fmt.Errorf("expected 4 matches, got %d", len(match))
-	}
-
-	sender := match[1]
-	receiver := match[2]
-	message := match[3]
+	sender := matches[1]
+	receiver := matches[2]
+	message := matches[3]
 
 	if receiver == "FP" {
 		return record.MessageRecord{}, fmt.Errorf("ignoring FP message: %q", line)
@@ -221,28 +208,23 @@ func parseUnknownRecord(line string, arrowType string) (record.UnknownRecord, er
 }
 
 func parseAddPilotRecord(line string) (record.AddPilotRecord, error) {
-	matches := addPilotRecordPattern.FindAllStringSubmatch(line, -1)
-	if len(matches) != 1 {
-		return record.AddPilotRecord{}, fmt.Errorf("expected 1 match, got %d for line %s", len(matches), line)
+	matches := addPilotRecordPattern.FindStringSubmatch(line)
+	if len(matches) != 5 {
+		return record.AddPilotRecord{}, fmt.Errorf("expected 5 matches, got %d", len(matches))
 	}
 
-	match := matches[0]
-	if len(match) != 5 {
-		return record.AddPilotRecord{}, fmt.Errorf("expected 5 matches, got %d", len(match))
-	}
-
-	callsign := match[1]
-	cid, err := strconv.ParseUint(match[2], 10, 32)
+	callsign := matches[1]
+	cid, err := strconv.ParseUint(matches[2], 10, 32)
 	if err != nil {
 		return record.AddPilotRecord{}, fmt.Errorf("cid: %w", err)
 	}
 
-	rating, err := strconv.ParseUint(match[3], 10, 8)
+	rating, err := strconv.ParseUint(matches[3], 10, 8)
 	if err != nil {
 		return record.AddPilotRecord{}, fmt.Errorf("rating: %w", err)
 	}
 
-	name := match[4]
+	name := matches[4]
 
 	return record.AddPilotRecord{
 		Callsign: callsign,

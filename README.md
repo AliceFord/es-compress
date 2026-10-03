@@ -12,12 +12,11 @@ Supported record types:
 Planned record types for compression:
 ```
 % (ATC position message)
+#AA (add ATC)
 $FP (flightplan)
 #PC (coordination)
 #DP (delete pilot)
-#AA (add ATC)
 $CR (request details)
-$AX (ask for METAR)
 $AR (METAR response)
 $ER (errors)
 $HO / $HA (handoff offer + accept)
@@ -29,6 +28,7 @@ $CQ (client query, which are just protocol requests and hold no useful data)
 $SB (ac model matching from SquawkBox)
 $ZC / $ZR (client authentication)
 #ST (fast packet, not used by ATC client)
+$AX (ask for METAR)
 #TM FP GET (flightplan recieved ack)
 ```
 
