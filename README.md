@@ -154,7 +154,10 @@ time in s  3 bytes (uint)
 #### `[record] (type 10): message`
 
 ```
-
+sender id    ? bytes (uvarint)
+receiver id  ? bytes (uvarint)
+message      ? bytes (raw)
+[stop]
 ```
 
 #### `[record] (type 11): unknown`

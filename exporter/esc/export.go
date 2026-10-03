@@ -2,6 +2,7 @@ package esc
 
 import (
 	"bytes"
+	"fmt"
 	"time"
 
 	"github.com/AliceFord/es-compress/binio"
@@ -84,6 +85,12 @@ func writeTextRegistry(
 		// Aircraft callsign.
 		if pos, ok := rec.Record.(record.PositionRecord); ok {
 			addText(pos.Callsign)
+		}
+
+		// Sender and receiver callsigns for messages.
+		if pos, ok := rec.Record.(record.MessageRecord); ok {
+			addText(pos.Sender)
+			addText(pos.Receiver)
 		}
 	}
 
@@ -170,11 +177,11 @@ func writeGenericRecord(
 	switch r := rec.Record.(type) {
 	case record.PositionRecord:
 		writePositionRecord(buf, r, textIDs, last)
-	// case record.MessageRecord:
-	// 	writeMessageRecord(buf, r, textIDs)
+	case record.MessageRecord:
+		writeMessageRecord(buf, r, textIDs)
 	case record.UnknownRecord:
 		writeUnknownRecord(buf, r)
 	default:
-		// panic(fmt.Sprintf("unknown record type: %+v", r))
+		panic(fmt.Sprintf("unknown record type: %+v", r))
 	}
 }
