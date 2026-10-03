@@ -24,8 +24,9 @@ const (
 	recordTypeDeltaLatLonAltHdg byte = 8
 	recordTypeDeltaLatLonHdg    byte = 9
 
-	recordTypeMessage byte = 10
-	recordTypeUnknown byte = 11
+	recordTypeMessage  byte = 10
+	recordTypeUnknown  byte = 11
+	recordTypeAddPilot byte = 12
 
 	changeTransponderType byte = 1 << 0
 	changeSquawk          byte = 1 << 1
@@ -289,6 +290,15 @@ func (p *Parser) parseGenericRecord(
 		}
 
 		genericRecord.Record = unknownRecord
+		return genericRecord, nil
+
+	case recordTypeAddPilot:
+		addPilotRecord, err := p.parseAddPilotRecord(r)
+		if err != nil {
+			return record.GenericRecord{}, err
+		}
+
+		genericRecord.Record = addPilotRecord
 		return genericRecord, nil
 
 	case 0xFF:

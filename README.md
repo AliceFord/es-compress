@@ -6,17 +6,16 @@ Supported record types:
 ```
 @N/@S (position)
 #TM (text message)
+#AP (add pilot)
+(all below are supported uncompressed)
 ```
-Planned record types:
+Planned record types for compression:
 ```
 % (ATC position message)
 $FP (flightplan)
 #PC (coordination)
 #DP (delete pilot)
-#AP (add pilot)
-#ST (fast packet)
 #AA (add ATC)
-#DA (delete ATC)
 $CR (request details)
 $AX (ask for METAR)
 $AR (METAR response)
@@ -29,6 +28,7 @@ Ignored record types (as these are essentially useless):
 $CQ (client query, which are just protocol requests and hold no useful data)
 $SB (ac model matching from SquawkBox)
 $ZC / $ZR (client authentication)
+#ST (fast packet, not used by ATC client)
 #TM FP GET (flightplan recieved ack)
 ```
 
@@ -156,16 +156,14 @@ time in s  3 bytes (uint)
 ```
 sender id    ? bytes (uvarint)
 receiver id  ? bytes (uvarint)
-message      ? bytes (raw)
-[stop]
+message      ? bytes (cstring)
 ```
 
 #### `[record] (type 11): unknown`
 
 ```
 [arrow type]
-unknown packet details  ? bytes
-[stop]
+unknown packet details  ? bytes (cstring)
 ```
 
 ##### `[arrow type]`
@@ -174,4 +172,13 @@ unknown packet details  ? bytes
 00    === ">>>>"
 01    === "<<<2"
 02    === "2>>1"
+```
+
+#### `[record] (type 12): add pilot packet`
+
+```
+pilot id     ? bytes (uvarint)
+cid          3 bytes (uint)
+rating       1 byte  (uint)
+name         ? bytes (cstring)
 ```

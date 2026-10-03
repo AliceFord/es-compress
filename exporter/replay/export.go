@@ -20,6 +20,8 @@ func Export(records []record.GenericRecord) string {
 			exportMessageRecord(&out, r)
 		case record.UnknownRecord:
 			exportUnknownRecord(&out, r)
+		case record.AddPilotRecord:
+			exportAddPilotRecord(&out, r)
 		default:
 			panic(fmt.Sprintf("unknown record type: %+v", r))
 		}
@@ -45,4 +47,8 @@ func exportMessageRecord(out *strings.Builder, rec record.MessageRecord) {
 
 func exportUnknownRecord(out *strings.Builder, rec record.UnknownRecord) {
 	fmt.Fprintf(out, "%s\n", rec.Raw)
+}
+
+func exportAddPilotRecord(out *strings.Builder, rec record.AddPilotRecord) {
+	fmt.Fprintf(out, "#AP%s:SERVER:%d::1:101:%d:%s\n", rec.Callsign, rec.CID, rec.Rating, rec.Name)
 }

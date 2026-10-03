@@ -11,11 +11,20 @@ import (
 )
 
 var (
+	ignoredMessages = []string{
+		"$CQ",
+		"$SB",
+		"$ZC",
+		"$ZR",
+		"#ST",
+	}
+
 	genericRecordPattern = regexp.MustCompile(`^\[(\d{2}):(\d{2}):(\d{2}) (2>>1|>>>>|<<<2) ([A-Za-z0-9_]+)]$`)
 	// XXX: The "-?" before the altitude is memes. Turns out altitude
 	// can be negative. Thanks amsterdam.
 	positionRecordPattern = regexp.MustCompile(`^@([NS]):([A-Z0-9_]+):(\d{1,4}):1:(-?\d{1,2}\.\d+):(-?\d{1,2}\.\d+):-?(\d+):\d+:(\d+):-?\d+$`)
 	messageRecordPattern  = regexp.MustCompile(`^#TM(.+?):(.+?):(.*)$`)
+	addPilotRecordPattern = regexp.MustCompile(`^#AP([A-Z0-9_]+):SERVER:(\d+)::1:\d+:(\d+):(.*)$`)
 )
 
 func Parse(s string) ([]record.GenericRecord, error) {
@@ -114,10 +123,15 @@ func parseRecordLine(line string, arrowType string) (record.Record, error) {
 	if strings.HasPrefix(line, "#TM") {
 		return parseMessageRecord(line)
 	}
-	if strings.HasPrefix(line, "$CQ") || strings.HasPrefix(line, "$SB") || strings.HasPrefix(line, "$ZC") || strings.HasPrefix(line, "$ZR") {
-		return nil, fmt.Errorf("ignoring intentionally unplanned messages: %q", line)
+	if strings.HasPrefix(line, "#AP") {
+		return parseAddPilotRecord(line)
 	}
 
+	for _, ignored := range ignoredMessages {
+		if strings.HasPrefix(line, ignored) {
+			return record.UnknownRecord{}, fmt.Errorf("ignoring intentionally unplanned messages: %q", line)
+		}
+	}
 	return parseUnknownRecord(line, arrowType)
 }
 
@@ -203,5 +217,37 @@ func parseUnknownRecord(line string, arrowType string) (record.UnknownRecord, er
 	return record.UnknownRecord{
 		Raw:       line,
 		ArrowType: arrowType,
+	}, nil
+}
+
+func parseAddPilotRecord(line string) (record.AddPilotRecord, error) {
+	matches := addPilotRecordPattern.FindAllStringSubmatch(line, -1)
+	if len(matches) != 1 {
+		return record.AddPilotRecord{}, fmt.Errorf("expected 1 match, got %d for line %s", len(matches), line)
+	}
+
+	match := matches[0]
+	if len(match) != 5 {
+		return record.AddPilotRecord{}, fmt.Errorf("expected 5 matches, got %d", len(match))
+	}
+
+	callsign := match[1]
+	cid, err := strconv.ParseUint(match[2], 10, 32)
+	if err != nil {
+		return record.AddPilotRecord{}, fmt.Errorf("cid: %w", err)
+	}
+
+	rating, err := strconv.ParseUint(match[3], 10, 8)
+	if err != nil {
+		return record.AddPilotRecord{}, fmt.Errorf("rating: %w", err)
+	}
+
+	name := match[4]
+
+	return record.AddPilotRecord{
+		Callsign: callsign,
+		CID:      uint32(cid),
+		Rating:   uint8(rating),
+		Name:     name,
 	}, nil
 }

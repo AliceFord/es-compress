@@ -24,8 +24,9 @@ const (
 	recordTypeDeltaLatLonAltHdg byte = 8
 	recordTypeDeltaLatLonHdg    byte = 9
 
-	recordTypeMessage byte = 10
-	recordTypeUnknown byte = 11
+	recordTypeMessage  byte = 10
+	recordTypeUnknown  byte = 11
+	recordTypeAddPilot byte = 12
 
 	stop = 0
 
@@ -91,6 +92,11 @@ func writeTextRegistry(
 		if pos, ok := rec.Record.(record.MessageRecord); ok {
 			addText(pos.Sender)
 			addText(pos.Receiver)
+		}
+
+		// Pilot callsign
+		if pos, ok := rec.Record.(record.AddPilotRecord); ok {
+			addText(pos.Callsign)
 		}
 	}
 
@@ -181,6 +187,8 @@ func writeGenericRecord(
 		writeMessageRecord(buf, r, textIDs)
 	case record.UnknownRecord:
 		writeUnknownRecord(buf, r)
+	case record.AddPilotRecord:
+		writeAddPilotRecord(buf, r, textIDs)
 	default:
 		panic(fmt.Sprintf("unknown record type: %+v", r))
 	}

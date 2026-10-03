@@ -1,6 +1,7 @@
 package record
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -37,6 +38,13 @@ type UnknownRecord struct {
 	Raw       string
 }
 
+type AddPilotRecord struct {
+	Callsign string
+	CID      uint32
+	Rating   uint8
+	Name     string
+}
+
 func (g GenericRecord) ArrowType() string {
 	switch r := g.Record.(type) {
 	case PositionRecord:
@@ -49,7 +57,9 @@ func (g GenericRecord) ArrowType() string {
 		return "<<<2"
 	case UnknownRecord:
 		return r.ArrowType
+	case AddPilotRecord:
+		return ">>>>"
 	default:
-		panic("unknown record type: " + r.(any).(string))
+		panic(fmt.Sprintf("unknown record type: %+v", r))
 	}
 }
