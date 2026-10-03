@@ -23,10 +23,10 @@ var (
 	genericRecordPattern = regexp.MustCompile(`^\[(\d{2}):(\d{2}):(\d{2}) (2>>1|>>>>|<<<2) ([A-Za-z0-9_]+)]$`)
 	// XXX: The "-?" before the altitude is memes. Turns out altitude
 	// can be negative. Thanks amsterdam.
-	positionRecordPattern = regexp.MustCompile(`^@([NS]):([A-Z0-9_]+):(\d{1,4}):1:(-?\d{1,2}\.\d+):(-?\d{1,2}\.\d+):-?(\d+):\d+:(\d+):-?\d+$`)
-	messageRecordPattern  = regexp.MustCompile(`^#TM(.+?):(.+?):(.*)$`)
-	addPilotRecordPattern = regexp.MustCompile(`^#AP([A-Z0-9_]+):SERVER:(\d+)::1:\d+:(\d+):(.*)$`)
-	addAtcRecordPattern   = regexp.MustCompile(`^#ATC([A-Z0-9_]+):SERVER:(\d+)::1:\d+:(\d+):(.*)$`)
+	positionRecordPattern           = regexp.MustCompile(`^@([NS]):([A-Z0-9_]+):(\d{1,4}):1:(-?\d{1,2}\.\d+):(-?\d{1,2}\.\d+):-?(\d+):\d+:(\d+):-?\d+$`)
+	messageRecordPattern            = regexp.MustCompile(`^#TM(.+?):(.+?):(.*)$`)
+	addPilotRecordPattern           = regexp.MustCompile(`^#AP([A-Z0-9_]+):SERVER:(\d+)::1:\d+:(\d+):(.*)$`)
+	controllerPositionRecordPattern = regexp.MustCompile(`^%([A-Z0-9_]+):(\d+):(\d+):(\d+):(\d+):(-?\d{1,2}\.\d+):(-?\d{1,2}\.\d+):\d+$`)
 )
 
 func Parse(s string) ([]record.GenericRecord, error) {
@@ -122,6 +122,9 @@ func parseRecordLine(line string, arrowType string) (record.Record, error) {
 	}
 	if strings.HasPrefix(line, "#AP") {
 		return parseAddPilotRecord(line)
+	}
+	if strings.HasPrefix(line, "%") {
+		return parseControllerPositionRecord(line)
 	}
 
 	for _, ignored := range ignoredMessages {
@@ -231,5 +234,53 @@ func parseAddPilotRecord(line string) (record.AddPilotRecord, error) {
 		CID:      uint32(cid),
 		Rating:   uint8(rating),
 		Name:     name,
+	}, nil
+}
+
+func parseControllerPositionRecord(line string) (record.ControllerPositionRecord, error) {
+	matches := controllerPositionRecordPattern.FindStringSubmatch(line)
+	if len(matches) != 8 {
+		return record.ControllerPositionRecord{}, fmt.Errorf("expected 8 matches, got %d", len(matches))
+	}
+
+	callsign := matches[1]
+	frequency, err := strconv.ParseUint(matches[2], 10, 24)
+	if err != nil {
+		return record.ControllerPositionRecord{}, fmt.Errorf("frequency: %w", err)
+	}
+
+	altitude, err := strconv.ParseUint(matches[3], 10, 16)
+	if err != nil {
+		return record.ControllerPositionRecord{}, fmt.Errorf("altitude: %w", err)
+	}
+
+	protocolVer, err := strconv.ParseUint(matches[4], 10, 16)
+	if err != nil {
+		return record.ControllerPositionRecord{}, fmt.Errorf("protocolVer: %w", err)
+	}
+
+	rating, err := strconv.ParseUint(matches[5], 10, 8)
+	if err != nil {
+		return record.ControllerPositionRecord{}, fmt.Errorf("rating: %w", err)
+	}
+
+	lat, err := strconv.ParseFloat(matches[6], 64)
+	if err != nil {
+		return record.ControllerPositionRecord{}, fmt.Errorf("lat: %w", err)
+	}
+
+	lon, err := strconv.ParseFloat(matches[7], 64)
+	if err != nil {
+		return record.ControllerPositionRecord{}, fmt.Errorf("lon: %w", err)
+	}
+
+	return record.ControllerPositionRecord{
+		Callsign:    callsign,
+		Frequency:   uint32(frequency),
+		Altitude:    uint16(altitude),
+		ProtocolVer: uint16(protocolVer),
+		Rating:      uint8(rating),
+		Lat:         lat,
+		Lon:         lon,
 	}, nil
 }

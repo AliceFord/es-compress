@@ -45,6 +45,16 @@ type AddPilotRecord struct {
 	Name     string
 }
 
+type ControllerPositionRecord struct {
+	Callsign    string
+	Frequency   uint32
+	Altitude    uint16
+	ProtocolVer uint16
+	Rating      uint8
+	Lat         float64
+	Lon         float64
+}
+
 func (g GenericRecord) ArrowType() string {
 	switch r := g.Record.(type) {
 	case PositionRecord:
@@ -58,6 +68,8 @@ func (g GenericRecord) ArrowType() string {
 	case UnknownRecord:
 		return r.ArrowType
 	case AddPilotRecord:
+		return ">>>>"
+	case ControllerPositionRecord:
 		return ">>>>"
 	default:
 		panic(fmt.Sprintf("unknown record type: %+v", r))

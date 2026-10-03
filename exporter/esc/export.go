@@ -28,6 +28,9 @@ const (
 	recordTypeUnknown  byte = 11
 	recordTypeAddPilot byte = 12
 
+	recordTypeControllerPosition          byte = 16
+	recordTypeControllerPositionUnchanged byte = 17
+
 	stop = 0
 
 	changeTransponderType byte = 1 << 0
@@ -98,6 +101,10 @@ func writeTextRegistry(
 		if pos, ok := rec.Record.(record.AddPilotRecord); ok {
 			addText(pos.Callsign)
 		}
+
+		if pos, ok := rec.Record.(record.ControllerPositionRecord); ok {
+			addText(pos.Callsign)
+		}
 	}
 
 	writeTextList(buf, texts)
@@ -121,6 +128,7 @@ func writeRecordStream(
 ) {
 	aircraftStates := make(map[uint16]aircraftState)
 	currentState := new(universalState)
+	controllerPositions := make(map[uint16]record.ControllerPositionRecord)
 
 	var prevTime time.Duration
 
@@ -150,7 +158,7 @@ func writeRecordStream(
 				)
 			}
 
-			writeGenericRecord(buf, rec, textIDs, aircraftStates)
+			writeGenericRecord(buf, rec, textIDs, aircraftStates, &controllerPositions)
 		}
 
 		i = j
@@ -179,6 +187,7 @@ func writeGenericRecord(
 	rec record.GenericRecord,
 	textIDs map[string]uint16,
 	last map[uint16]aircraftState,
+	controllerPositions *map[uint16]record.ControllerPositionRecord,
 ) {
 	switch r := rec.Record.(type) {
 	case record.PositionRecord:
@@ -189,6 +198,8 @@ func writeGenericRecord(
 		writeUnknownRecord(buf, r)
 	case record.AddPilotRecord:
 		writeAddPilotRecord(buf, r, textIDs)
+	case record.ControllerPositionRecord:
+		writeControllerPositionPacket(buf, r, textIDs, controllerPositions)
 	default:
 		panic(fmt.Sprintf("unknown record type: %+v", r))
 	}

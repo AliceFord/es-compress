@@ -28,6 +28,9 @@ const (
 	recordTypeUnknown  byte = 11
 	recordTypeAddPilot byte = 12
 
+	recordTypeControllerPosition          byte = 16
+	recordTypeControllerPositionUnchanged byte = 17
+
 	changeTransponderType byte = 1 << 0
 	changeSquawk          byte = 1 << 1
 	changeLat             byte = 1 << 2
@@ -51,6 +54,7 @@ type Parser struct {
 	currentTimestamp time.Duration
 	currentCallsign  string
 	aircraftStates   map[string]aircraftState
+	controllerStates map[uint16]record.ControllerPositionRecord
 
 	textMap map[uint16]string
 }
@@ -118,6 +122,7 @@ func (p *Parser) parseRecordStream(
 	var records []record.GenericRecord
 
 	p.aircraftStates = make(map[string]aircraftState)
+	p.controllerStates = make(map[uint16]record.ControllerPositionRecord)
 
 	for {
 		genericRecord, err := p.parseGenericRecord(r)
@@ -299,6 +304,24 @@ func (p *Parser) parseGenericRecord(
 		}
 
 		genericRecord.Record = addPilotRecord
+		return genericRecord, nil
+
+	case recordTypeControllerPosition:
+		controllerPositionRecord, err := p.parseControllerPositionRecord(r)
+		if err != nil {
+			return record.GenericRecord{}, err
+		}
+
+		genericRecord.Record = controllerPositionRecord
+		return genericRecord, nil
+
+	case recordTypeControllerPositionUnchanged:
+		controllerPositionRecord, err := p.parseControllerPositionUnchangedRecord(r)
+		if err != nil {
+			return record.GenericRecord{}, err
+		}
+
+		genericRecord.Record = controllerPositionRecord
 		return genericRecord, nil
 
 	case 0xFF:

@@ -7,11 +7,11 @@ Supported record types:
 @N/@S (position)
 #TM (text message)
 #AP (add pilot)
+% (ATC position message)
 (all below are supported uncompressed)
 ```
 Planned record types for compression:
 ```
-% (ATC position message)
 #AA (add ATC)
 $FP (flightplan)
 #PC (coordination)
@@ -181,4 +181,28 @@ pilot id     ? bytes (uvarint)
 cid          3 bytes (uint)
 rating       1 byte  (uint)
 name         ? bytes (cstring)
+```
+
+#### `[record] (type 13): add atc packet`
+
+#### `[record] (type 14): delete pilot packet`
+
+#### `[record] (type 15): delete atc packet`
+
+#### `[record] (type 16): controller position packet`
+
+```
+controller id    ? bytes (uvarint)
+frequency        3 bytes (uint)
+altitude         2 bytes (uint)
+protocol version 2 bytes (uint)
+rating           1 byte  (uint)
+lat              4 bytes (int, actual lat * 100000)
+lon              4 bytes (int, actual lon * 100000)
+```
+
+#### `[record] (type 17): controller position unchanged`
+
+```
+controller id   ? bytes (uvarint)
 ```
