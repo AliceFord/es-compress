@@ -55,6 +55,35 @@ type ControllerPositionRecord struct {
 	Lon         float64
 }
 
+type FlightplanRecord struct {
+	Callsign      string
+	FlightRules   byte
+	AircraftType  string
+	Speed         uint16
+	Departure     string
+	OffblocksTime time.Duration
+	CruiseAlt     uint16
+	Arrival       string
+	EnrouteTime   time.Duration
+	EnrouteFuel   time.Duration
+	Alternate     string
+	Details       string
+	Route         string
+}
+
+// type FlightplanDetails struct {
+// 	PBN        string
+// 	DOF        string
+// 	REG        string
+// 	EET        string
+// 	SEL        string
+// 	OPR        string
+// 	PER        string
+// 	RVR        uint16
+// 	RMK        string
+// 	VoiceRules string
+// }
+
 func (g GenericRecord) ArrowType() string {
 	switch r := g.Record.(type) {
 	case PositionRecord:
@@ -70,6 +99,8 @@ func (g GenericRecord) ArrowType() string {
 	case AddPilotRecord:
 		return ">>>>"
 	case ControllerPositionRecord:
+		return ">>>>"
+	case FlightplanRecord:
 		return ">>>>"
 	default:
 		panic(fmt.Sprintf("unknown record type: %+v", r))

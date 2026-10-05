@@ -30,6 +30,7 @@ const (
 
 	recordTypeControllerPosition          byte = 16
 	recordTypeControllerPositionUnchanged byte = 17
+	recordTypeFlightplan                  byte = 18
 
 	changeTransponderType byte = 1 << 0
 	changeSquawk          byte = 1 << 1
@@ -123,6 +124,8 @@ func (p *Parser) parseRecordStream(
 
 	p.aircraftStates = make(map[string]aircraftState)
 	p.controllerStates = make(map[uint16]record.ControllerPositionRecord)
+
+	fmt.Printf("%+v\n", p.textMap)
 
 	for {
 		genericRecord, err := p.parseGenericRecord(r)
@@ -322,6 +325,15 @@ func (p *Parser) parseGenericRecord(
 		}
 
 		genericRecord.Record = controllerPositionRecord
+		return genericRecord, nil
+
+	case recordTypeFlightplan:
+		flightplanRecord, err := p.parseFlightplanRecord(r)
+		if err != nil {
+			return record.GenericRecord{}, err
+		}
+
+		genericRecord.Record = flightplanRecord
 		return genericRecord, nil
 
 	case 0xFF:

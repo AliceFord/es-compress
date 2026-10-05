@@ -30,6 +30,7 @@ const (
 
 	recordTypeControllerPosition          byte = 16
 	recordTypeControllerPositionUnchanged byte = 17
+	recordTypeFlightplan                  byte = 18
 
 	stop = 0
 
@@ -74,6 +75,10 @@ func writeTextRegistry(
 	textIDs := make(map[string]uint16)
 
 	addText := func(text string) {
+		if text == "" {
+			return
+		}
+
 		if _, ok := textIDs[text]; ok {
 			return
 		}
@@ -102,8 +107,17 @@ func writeTextRegistry(
 			addText(pos.Callsign)
 		}
 
+		// Controller callsign
 		if pos, ok := rec.Record.(record.ControllerPositionRecord); ok {
 			addText(pos.Callsign)
+		}
+
+		// Flightplan details
+		if pos, ok := rec.Record.(record.FlightplanRecord); ok {
+			addText(pos.Callsign)
+			addText(pos.AircraftType)
+			addText(pos.Details)
+			addText(pos.Route)
 		}
 	}
 
@@ -200,6 +214,8 @@ func writeGenericRecord(
 		writeAddPilotRecord(buf, r, textIDs)
 	case record.ControllerPositionRecord:
 		writeControllerPositionPacket(buf, r, textIDs, controllerPositions)
+	case record.FlightplanRecord:
+		writeFlightplanRecord(buf, r, textIDs)
 	default:
 		panic(fmt.Sprintf("unknown record type: %+v", r))
 	}

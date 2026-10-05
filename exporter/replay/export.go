@@ -24,6 +24,8 @@ func Export(records []record.GenericRecord) string {
 			exportAddPilotRecord(&out, r)
 		case record.ControllerPositionRecord:
 			exportControllerPositionRecord(&out, r)
+		case record.FlightplanRecord:
+			exportFlightplanRecord(&out, r)
 		default:
 			panic(fmt.Sprintf("unknown record type: %+v", r))
 		}
@@ -57,4 +59,14 @@ func exportAddPilotRecord(out *strings.Builder, rec record.AddPilotRecord) {
 
 func exportControllerPositionRecord(out *strings.Builder, rec record.ControllerPositionRecord) {
 	fmt.Fprintf(out, "%%%s:%d:%d:%d:%d:%f:%f:0\n", rec.Callsign, rec.Frequency, rec.Altitude, rec.ProtocolVer, rec.Rating, rec.Lat, rec.Lon)
+}
+
+func exportFlightplanRecord(out *strings.Builder, rec record.FlightplanRecord) {
+	eobt := int(int(rec.OffblocksTime.Hours())*100 + (int(rec.OffblocksTime.Minutes()) % 60))
+	enrouteHours := int(rec.EnrouteTime.Hours())
+	enrouteMinutes := int(rec.EnrouteTime.Minutes()) % 60
+	fuelHours := int(rec.EnrouteFuel.Hours())
+	fuelMinutes := int(rec.EnrouteFuel.Minutes()) % 60
+
+	fmt.Fprintf(out, "$FP%s:*A:%c:%s:%d:%s:%d:%d:%d:%s:%d:%d:%d:%d:%s:%s:%s\n", rec.Callsign, rec.FlightRules, rec.AircraftType, rec.Speed, rec.Departure, eobt, eobt, rec.CruiseAlt, rec.Arrival, enrouteHours, enrouteMinutes, fuelHours, fuelMinutes, rec.Alternate, rec.Details, rec.Route)
 }

@@ -27,6 +27,7 @@ var (
 	messageRecordPattern            = regexp.MustCompile(`^#TM(.+?):(.+?):(.*)$`)
 	addPilotRecordPattern           = regexp.MustCompile(`^#AP([A-Z0-9_]+):SERVER:(\d+)::1:\d+:(\d+):(.*)$`)
 	controllerPositionRecordPattern = regexp.MustCompile(`^%([A-Z0-9_]+):(\d+):(\d+):(\d+):(\d+):(-?\d{1,2}\.\d+):(-?\d{1,2}\.\d+):\d+$`)
+	flightplanRecordPattern         = regexp.MustCompile(`^\$FP([A-Z0-9_]+):.*?:(.):(.*?):(\d+):(.*?):(\d+):\d+:((?:FL)?\d*):(.*?):(\d+):(\d+):(\d+):(\d+):(.*?):(.*?):(.*)$`)
 )
 
 func Parse(s string) ([]record.GenericRecord, error) {
@@ -125,6 +126,9 @@ func parseRecordLine(line string, arrowType string) (record.Record, error) {
 	}
 	if strings.HasPrefix(line, "%") {
 		return parseControllerPositionRecord(line)
+	}
+	if strings.HasPrefix(line, "$FP") {
+		return parseFlightplanRecord(line)
 	}
 
 	for _, ignored := range ignoredMessages {
@@ -282,5 +286,80 @@ func parseControllerPositionRecord(line string) (record.ControllerPositionRecord
 		Rating:      uint8(rating),
 		Lat:         lat,
 		Lon:         lon,
+	}, nil
+}
+
+func parseFlightplanRecord(line string) (record.FlightplanRecord, error) {
+	matches := flightplanRecordPattern.FindStringSubmatch(line)
+	if len(matches) != 16 {
+		return record.FlightplanRecord{}, fmt.Errorf("expected 16 matches, got %d", len(matches))
+	}
+
+	callsign := matches[1]
+	flightRules := matches[2][0]
+	aircraftType := matches[3]
+	speed, err := strconv.ParseUint(matches[4], 10, 16)
+	if err != nil {
+		return record.FlightplanRecord{}, fmt.Errorf("speed: %w", err)
+	}
+
+	departure := matches[5]
+	offBlocksRaw := matches[6]
+	var offblocksTime time.Duration
+	if len(offBlocksRaw) >= 3 {
+		offblocksTime, err = time.ParseDuration(offBlocksRaw[:len(offBlocksRaw)-2] + "h" + offBlocksRaw[len(offBlocksRaw)-2:] + "m")
+		if err != nil {
+			return record.FlightplanRecord{}, fmt.Errorf("offblocksTime: %w", err)
+		}
+	} else {
+		offblocksTime, err = time.ParseDuration(offBlocksRaw + "m")
+		if err != nil {
+			return record.FlightplanRecord{}, fmt.Errorf("offblocksTime: %w", err)
+		}
+	}
+
+	cruiseRaw := matches[7]
+	var cruiseAlt uint64
+
+	if cruiseRaw != "" {
+		if strings.HasPrefix(cruiseRaw, "FL") {
+			cruiseRaw = cruiseRaw[2:] + "00"
+		}
+
+		cruiseAlt, err = strconv.ParseUint(cruiseRaw, 10, 16)
+		if err != nil {
+			return record.FlightplanRecord{}, fmt.Errorf("cruiseAlt: %w", err)
+		}
+	}
+
+	arrival := matches[8]
+	enrouteTime, err := time.ParseDuration(matches[9] + "h" + matches[10] + "m")
+	if err != nil {
+		return record.FlightplanRecord{}, fmt.Errorf("enrouteTime: %w", err)
+	}
+
+	enrouteFuel, err := time.ParseDuration(matches[11] + "h" + matches[12] + "m")
+	if err != nil {
+		return record.FlightplanRecord{}, fmt.Errorf("enrouteFuel: %w", err)
+	}
+
+	alternate := matches[13]
+	details := matches[14]
+	route := matches[15]
+
+	return record.FlightplanRecord{
+		Callsign:      callsign,
+		FlightRules:   flightRules,
+		AircraftType:  aircraftType,
+		Speed:         uint16(speed),
+		Departure:     departure,
+		OffblocksTime: offblocksTime,
+		CruiseAlt:     uint16(cruiseAlt),
+		Arrival:       arrival,
+		EnrouteTime:   enrouteTime,
+		EnrouteFuel:   enrouteFuel,
+		Alternate:     alternate,
+		Details:       details,
+		Route:         route,
 	}, nil
 }

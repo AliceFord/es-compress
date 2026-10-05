@@ -206,3 +206,21 @@ lon              4 bytes (int, actual lon * 100000)
 ```
 controller id   ? bytes (uvarint)
 ```
+
+#### `[record] (type 18): flightplan record`
+
+```
+callsign id          ? bytes (uvarint)
+flight rules         1 byte  (char)
+aircraft type id     ? bytes (uvarint)
+speed                2 bytes (uint)
+departure aerodrome  ? bytes (cstring)
+offblocks time       2 bytes (uint, in minutes)
+cruise alt           2 bytes (uint)
+arrival aerodrome    ? bytes (cstring)
+enroute time         2 bytes (uint, in minutes)
+enroute fuel         2 bytes (uint, in minutes)
+alternate            ? bytes (cstring)
+details id           ? bytes (uvarint)
+route id             ? bytes (uvarint)
+```

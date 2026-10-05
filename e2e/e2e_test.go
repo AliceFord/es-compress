@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"testing"
+	"time"
 
 	exportesc "github.com/AliceFord/es-compress/exporter/esc"
 	importesc "github.com/AliceFord/es-compress/importer/esc"
@@ -47,7 +48,37 @@ func TestReplayToESCRoundTripPreservesRecords(t *testing.T) {
 			a.Heading == b.Heading
 	})
 
-	if diff := cmp.Diff(original, roundTripped, positionComparer); diff != "" {
+	controllerPositionComparer := cmp.Comparer(func(a, b record.ControllerPositionRecord) bool {
+		return a.Callsign == b.Callsign &&
+			a.Frequency == b.Frequency &&
+			a.Altitude == b.Altitude &&
+			a.ProtocolVer == b.ProtocolVer &&
+			a.Rating == b.Rating &&
+			math.Abs(a.Lat-b.Lat) <= 0.00001+1e-12 &&
+			math.Abs(a.Lon-b.Lon) <= 0.00001+1e-12
+	})
+
+	withinMinute := func(a, b time.Duration) bool {
+		return (a - b).Abs() <= time.Minute
+	}
+
+	flightplanComparer := cmp.Comparer(func(a, b record.FlightplanRecord) bool {
+		return a.Callsign == b.Callsign &&
+			a.FlightRules == b.FlightRules &&
+			a.AircraftType == b.AircraftType &&
+			a.Speed == b.Speed &&
+			a.Departure == b.Departure &&
+			withinMinute(a.OffblocksTime, b.OffblocksTime) &&
+			a.CruiseAlt == b.CruiseAlt &&
+			a.Arrival == b.Arrival &&
+			withinMinute(a.EnrouteTime, b.EnrouteTime) &&
+			withinMinute(a.EnrouteFuel, b.EnrouteFuel) &&
+			a.Alternate == b.Alternate &&
+			a.Details == b.Details &&
+			a.Route == b.Route
+	})
+
+	if diff := cmp.Diff(original, roundTripped, positionComparer, controllerPositionComparer, flightplanComparer); diff != "" {
 		t.Errorf("records differ after round trip (-want +got):\n%s", diff)
 	}
 }
